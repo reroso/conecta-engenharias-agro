@@ -301,9 +301,32 @@ class SimulatedDatabase {
   }
 
   findRecomendacoesPorUsuario(usuarioId) {
+    // Limpar recomendações muito antigas automaticamente
+    this.limparRecomendacoesAntigas(usuarioId);
+    
     return Array.from(this.recomendacoes.values())
       .filter(r => r.usuario === usuarioId && r.ativa)
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+
+  // Método para limpar recomendações antigas (mais de 30 dias)
+  limparRecomendacoesAntigas(usuarioId) {
+    const agora = new Date();
+    const limite = new Date(agora.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 dias atrás
+    
+    let removidas = 0;
+    for (const [id, recomendacao] of this.recomendacoes.entries()) {
+      if (recomendacao.usuario === usuarioId && 
+          recomendacao.createdAt && 
+          new Date(recomendacao.createdAt) < limite) {
+        this.recomendacoes.delete(id);
+        removidas++;
+      }
+    }
+    
+    if (removidas > 0) {
+      console.log(`🧹 ${removidas} recomendações antigas removidas para usuário ${usuarioId}`);
+    }
   }
 
   findSoloPorPlantacao(plantacaoId) {
@@ -336,9 +359,75 @@ class SimulatedDatabase {
     return plantacao;
   }
 
-  generateClimateDataForPlantacao(plantacaoId) {
-    // Gerar 30 dias de dados climáticos históricos para a nova plantação
-    for (let i = 30; i >= 0; i--) {
+  async generateClimateDataForPlantacao(plantacaoId, dias = 30) {
+    const plantacao = this.plantacoes.get(plantacaoId);
+    if (!plantacao) {
+      console.error('Plantação não encontrada para gerar dados climáticos');
+      return;
+    }
+
+    try {
+      // Tentar usar dados reais do INMET
+      const InmetService = require('../services/InmetService');
+      
+      // Buscar estação mais próxima
+      const estacoes = await InmetService.buscarEstacoes(
+        plantacao.localizacao.latitude, 
+        plantacao.localizacao.longitude,
+        100 // 100km de raio
+      );
+
+      if (estacoes.length > 0) {
+        const estacaoProxima = estacoes[0];
+        console.log(`Usando estação INMET: ${estacaoProxima.nome} (${estacaoProxima.codigo})`);
+        
+        // Buscar dados dos últimos dias
+        const dataFim = new Date();
+        const dataInicio = new Date();
+        dataInicio.setDate(dataFim.getDate() - dias);
+        
+        const dadosReais = await InmetService.buscarDadosClimaticos(
+          estacaoProxima.codigo,
+          dataInicio,
+          dataFim
+        );
+
+        // Salvar dados reais no banco simulado
+        dadosReais.forEach(dado => {
+          const dadoId = this.generateId();
+          this.dadosClimaticos.set(dadoId, {
+            _id: dadoId,
+            plantacao: plantacaoId,
+            data: dado.data,
+            temperatura: dado.temperatura,
+            umidade: dado.umidade,
+            precipitacao: dado.precipitacao,
+            vento: dado.vento,
+            pressaoAtmosferica: dado.pressaoAtmosferica,
+            origem: dado.origem || 'inmet',
+            estacao: {
+              codigo: estacaoProxima.codigo,
+              nome: estacaoProxima.nome,
+              distancia: 0 // Calcular se necessário
+            }
+          });
+        });
+
+        console.log(`${dadosReais.length} registros climáticos salvos da estação ${estacaoProxima.nome}`);
+        return;
+      }
+    } catch (error) {
+      console.warn('Erro ao buscar dados do INMET, usando dados simulados:', error.message);
+    }
+
+    // Fallback: Gerar dados simulados se INMET falhar
+    console.log('Gerando dados climáticos simulados...');
+    this.generateSimulatedClimateData(plantacaoId, dias);
+  }
+
+  generateSimulatedClimateData(plantacaoId, dias = 30) {
+    // Gerar dados climáticos simulados (código original)
+    for (let i = dias; i >= 0; i--) {
       const data = new Date();
       data.setDate(data.getDate() - i);
       
@@ -375,7 +464,7 @@ class SimulatedDatabase {
       });
     }
     
-    console.log(`Gerados dados climáticos para plantação ${plantacaoId}: 31 registros`);
+    console.log(`Gerados dados climáticos simulados para plantação ${plantacaoId}: ${dias + 1} registros`);
   }
 
   addRecomendacao(recomendacao) {

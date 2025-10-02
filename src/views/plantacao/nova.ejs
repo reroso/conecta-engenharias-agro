@@ -17,27 +17,48 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="especie" class="form-label">Espécie</label>
-                    <select id="especie" name="especie" class="form-select" required>
-                        <option value="">Selecione a espécie</option>
-                        <option value="cafe">Café</option>
-                        <option value="milho">Milho</option>
-                        <option value="soja">Soja</option>
-                        <option value="cana">Cana-de-açúcar</option>
-                        <option value="feijao">Feijão</option>
-                        <option value="algodao">Algodão</option>
-                        <option value="trigo">Trigo</option>
-                        <option value="arroz">Arroz</option>
-                        <option value="outro">Outro</option>
+                    <label for="especie" class="form-label">Cultura *</label>
+                    <select id="especie" name="especie" class="form-select" required readonly>
+                        <option value="cafe" selected>Café</option>
                     </select>
+                    <small class="form-text text-muted">Este sistema é especializado em cafeicultura</small>
                 </div>
             </div>
             
             <div class="form-row">
                 <div class="form-group">
-                    <label for="variedade" class="form-label">Variedade</label>
-                    <input type="text" id="variedade" name="variedade" class="form-input" 
-                           placeholder="Ex: Arábica, Bourbon, etc.">
+                    <label for="variedade_cafe" class="form-label">Variedade do Café *</label>
+                    <select id="variedade_cafe" name="variedade_cafe" class="form-select" required>
+                        <option value="">Selecione a variedade</option>
+                        <option value="mundo_novo">Mundo Novo (Arábica)</option>
+                        <option value="catuai">Catuaí (Arábica)</option>
+                        <option value="bourbon">Bourbon (Arábica)</option>
+                        <option value="acaia">Acaiá (Arábica)</option>
+                        <option value="conilon">Conilon (Robusta)</option>
+                    </select>
+                    <small class="form-text text-muted">Selecione a variedade específica de café cultivada</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="fase_fenologica" class="form-label">Fase Fenológica Atual *</label>
+                    <select id="fase_fenologica" name="fase_fenologica" class="form-select" required>
+                        <option value="">Selecione a fase atual</option>
+                        <option value="repouso">Repouso (Mai-Ago)</option>
+                        <option value="brotacao">Brotação (Set)</option>
+                        <option value="floracao">Floração (Out-Dez)</option>
+                        <option value="granacao">Granação (Jan-Abr)</option>
+                        <option value="maturacao">Maturação (Mai-Jul)</option>
+                    </select>
+                    <small class="form-text text-muted">Fase atual do desenvolvimento da planta</small>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="variedade" class="form-label">Observações da Variedade</label>
+                    <input type="text" id="variedade" name="variedade" class="form-input" readonly
+                           placeholder="Informações serão preenchidas automaticamente">
+                    <small class="form-text text-muted">Características específicas da variedade selecionada</small>
                 </div>
                 
                 <div class="form-group">
@@ -115,6 +136,50 @@
                 </div>
             </div>
             
+            <!-- Seção de Dados do Solo -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h4>📊 Informações do Solo</h4>
+                    <small class="text-muted">Dados básicos para análise agronômica</small>
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ph_solo" class="form-label">pH do Solo *</label>
+                            <input type="number" id="ph_solo" name="ph_solo" class="form-input" 
+                                   min="3.0" max="9.0" step="0.1" required
+                                   placeholder="Ex: 5.8">
+                            <small class="form-text text-muted">Valor entre 3.0 e 9.0 (ideal para café: 5.0-6.5)</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="tipo_solo" class="form-label">Tipo de Solo *</label>
+                            <select id="tipo_solo" name="tipo_solo" class="form-select" required>
+                                <option value="">Selecione o tipo</option>
+                                <option value="arenoso">Arenoso (drena rápido)</option>
+                                <option value="medio">Médio (franco)</option>
+                                <option value="argiloso">Argiloso (retém água)</option>
+                            </select>
+                            <small class="form-text text-muted">Textura predominante do solo</small>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="data_plantio" class="form-label">Data de Plantio *</label>
+                            <input type="date" id="data_plantio" name="data_plantio" class="form-input" required>
+                            <small class="form-text text-muted">Para calcular idade da plantação</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="ultima_adubacao" class="form-label">Última Adubação</label>
+                            <input type="date" id="ultima_adubacao" name="ultima_adubacao" class="form-input">
+                            <small class="form-text text-muted">Data da última aplicação de fertilizante (opcional)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <div class="form-group">
                 <label for="observacoes" class="form-label">Observações (opcional)</label>
                 <textarea id="observacoes" name="observacoes" class="form-input" rows="3" 
@@ -130,6 +195,48 @@
 </div>
 
 <script>
+// Informações das variedades de café
+const variedadesCafe = {
+    "mundo_novo": "Arábica - Temp. ideal: 18-23°C - Não tolera excesso de calor",
+    "catuai": "Arábica - Temp. ideal: 19-24°C - Boa adaptação a diferentes solos", 
+    "bourbon": "Arábica - Temp. ideal: 18-22°C - Mais sensível a pragas",
+    "acaia": "Arábica - Temp. ideal: 20-25°C - Melhor em regiões do Cerrado",
+    "conilon": "Robusta - Temp. ideal: 22-30°C - Não tolera frio abaixo de 18°C"
+};
+
+// Atualizar informações da variedade
+document.getElementById('variedade_cafe').addEventListener('change', function() {
+    const variedadeSelecionada = this.value;
+    const campoObservacoes = document.getElementById('variedade');
+    
+    if (variedadeSelecionada && variedadesCafe[variedadeSelecionada]) {
+        campoObservacoes.value = variedadesCafe[variedadeSelecionada];
+    } else {
+        campoObservacoes.value = '';
+    }
+});
+
+// Detectar fase fenológica automaticamente baseada na data atual
+function detectarFaseAtual() {
+    const agora = new Date();
+    const mes = agora.getMonth(); // 0-11
+    
+    if (mes >= 4 && mes <= 7) return 'repouso'; // Mai-Ago
+    if (mes === 8) return 'brotacao'; // Set
+    if (mes >= 9 && mes <= 11) return 'floracao'; // Out-Dez
+    if (mes >= 0 && mes <= 3) return 'granacao'; // Jan-Abr
+    if (mes === 4 || mes === 6) return 'maturacao'; // Mai, Jul
+    
+    return 'repouso';
+}
+
+// Pré-selecionar fase fenológica atual
+document.addEventListener('DOMContentLoaded', function() {
+    const faseAtual = detectarFaseAtual();
+    const selectFase = document.getElementById('fase_fenologica');
+    selectFase.value = faseAtual;
+});
+
 document.getElementById('novaPlantacaoForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     

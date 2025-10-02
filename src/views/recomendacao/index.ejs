@@ -1,9 +1,9 @@
 <div class="page-header">
     <h1 class="page-title">Recomendações</h1>
-    <p class="breadcrumb">Gerencie suas recomendações agrícolas</p>
-    <button onclick="generateRecommendations()" class="btn btn-primary">
-        ✨ Gerar Novas Recomendações
-    </button>
+    <p class="breadcrumb">Suas recomendações agrícolas atualizadas automaticamente</p>
+    <div class="page-actions">
+        <small class="text-muted">🤖 Recomendações geradas automaticamente com base em dados reais</small>
+    </div>
 </div>
 
 <div class="grid grid-3">
@@ -209,9 +209,12 @@ function renderRecomendacoes() {
         container.innerHTML = `
             <div class="text-center">
                 <p class="text-muted">Nenhuma recomendação encontrada com os filtros aplicados.</p>
-                <button onclick="generateRecommendations()" class="btn btn-primary">
-                    Gerar Recomendações
-                </button>
+                <p class="text-muted">🤖 As recomendações são geradas automaticamente quando você:</p>
+                <ul class="text-muted" style="text-align: left; display: inline-block;">
+                    <li>Cadastra uma nova plantação de café</li>
+                    <li>Acessa o sistema (verifica a cada 24h)</li>
+                    <li>Atualiza dados climáticos</li>
+                </ul>
             </div>
         `;
         return;

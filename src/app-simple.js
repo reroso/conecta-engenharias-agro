@@ -195,15 +195,105 @@ app.get('/register', (req, res) => {
   res.redirect('/auth/register');
 });
 
-// Dashboard (página principal)
-app.get('/', requireAuth, (req, res) => {
-  res.render('dashboard', { 
-    title: 'Dashboard - Conecta Engenharias Agro'
-  });
+// Dashboard (página principal com geração automática de recomendações)
+app.get('/', requireAuth, async (req, res) => {
+  try {
+    const usuarioId = req.session.user.id;
+    
+    // Verificar e gerar recomendações automaticamente se necessário
+    await verificarEGerarRecomendacoesAutomaticas(usuarioId);
+    
+    res.render('dashboard', { 
+      title: 'Dashboard - Conecta Engenharias Agro'
+    });
+  } catch (error) {
+    console.error('Erro no dashboard:', error);
+    res.render('dashboard', { 
+      title: 'Dashboard - Conecta Engenharias Agro'
+    });
+  }
 });
 
+// Função auxiliar para verificar e gerar recomendações automaticamente
+async function verificarEGerarRecomendacoesAutomaticas(usuarioId) {
+  try {
+    const CafeAlgorithm = require('./services/CafeAlgorithm');
+    const algoritmo = new CafeAlgorithm();
+    
+    const plantacoes = simulatedDB.findPlantacoesPorUsuario(usuarioId);
+    const agora = new Date();
+    
+    for (const plantacao of plantacoes) {
+      // Apenas plantações de café
+      if (plantacao.especie !== 'cafe') continue;
+      
+      // Verificar se precisa de novas recomendações
+      const recomendacoesExistentes = simulatedDB.findRecomendacoesPorUsuario(usuarioId)
+        .filter(r => r.plantacao === plantacao._id && r.status === 'pendente');
+      
+      // Verificar última geração de recomendações
+      const ultimaRecomendacao = recomendacoesExistentes
+        .sort((a, b) => new Date(b.criadaEm) - new Date(a.criadaEm))[0];
+      
+      let precisaGerar = false;
+      
+      if (!ultimaRecomendacao) {
+        precisaGerar = true; // Nunca gerou recomendações
+      } else {
+        const horasDesdeUltima = (agora - new Date(ultimaRecomendacao.criadaEm)) / (1000 * 60 * 60);
+        precisaGerar = horasDesdeUltima > 24; // Gerar novas a cada 24 horas
+      }
+      
+      if (precisaGerar) {
+        // Buscar dados climáticos
+        let dadosClimaticos = simulatedDB.findDadosClimaticosPorPlantacao(plantacao._id, 7);
+        
+        // Verificar se dados climáticos são recentes (últimas 48h)
+        if (dadosClimaticos.length > 0) {
+          const dadoMaisRecente = dadosClimaticos[0];
+          const horasDesdeUltimoDado = (agora - new Date(dadoMaisRecente.data)) / (1000 * 60 * 60);
+          
+          if (horasDesdeUltimoDado > 48) {
+            // Atualizar dados climáticos se muito antigos
+            await simulatedDB.generateClimateDataForPlantacao(plantacao._id, 7);
+            dadosClimaticos = simulatedDB.findDadosClimaticosPorPlantacao(plantacao._id, 7);
+          }
+        } else {
+          // Gerar dados climáticos se não existirem
+          await simulatedDB.generateClimateDataForPlantacao(plantacao._id, 7);
+          dadosClimaticos = simulatedDB.findDadosClimaticosPorPlantacao(plantacao._id, 7);
+        }
+        
+        // Preparar dados do solo
+        const dadosSolo = {
+          ph: plantacao.ph_solo || 6.0,
+          tipo_solo: plantacao.tipo_solo || 'medio'
+        };
+        
+        // Gerar novas recomendações
+        const recomendacoes = algoritmo.gerarRecomendacoes(plantacao, dadosClimaticos, dadosSolo);
+        
+        // Salvar recomendações
+        recomendacoes.forEach(rec => {
+          const recomendacaoFormatada = algoritmo.formatarRecomendacao(rec, plantacao._id, usuarioId);
+          simulatedDB.addRecomendacao(recomendacaoFormatada);
+        });
+        
+        if (recomendacoes.length > 0) {
+          console.log(`✅ ${recomendacoes.length} recomendações automáticas geradas para ${plantacao.nome}`);
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ Erro na geração automática de recomendações:', error.message);
+  }
+}
+
 // Páginas principais do sistema
-app.get('/plantacao', requireAuth, (req, res) => {
+app.get('/plantacao', requireAuth, async (req, res) => {
+  // Verificar recomendações automáticas
+  await verificarEGerarRecomendacoesAutomaticas(req.session.user.id);
+  
   res.render('plantacao/index', { 
     title: 'Plantações - Conecta Engenharias Agro'
   });
@@ -215,13 +305,19 @@ app.get('/plantacao/nova', requireAuth, (req, res) => {
   });
 });
 
-app.get('/clima', requireAuth, (req, res) => {
+app.get('/clima', requireAuth, async (req, res) => {
+  // Verificar recomendações automáticas
+  await verificarEGerarRecomendacoesAutomaticas(req.session.user.id);
+  
   res.render('clima/index', { 
     title: 'Dados Climáticos - Conecta Engenharias Agro'
   });
 });
 
-app.get('/recomendacao', requireAuth, (req, res) => {
+app.get('/recomendacao', requireAuth, async (req, res) => {
+  // Verificar recomendações automáticas
+  await verificarEGerarRecomendacoesAutomaticas(req.session.user.id);
+  
   res.render('recomendacao/index', { 
     title: 'Recomendações - Conecta Engenharias Agro'
   });
@@ -239,20 +335,40 @@ app.get('/api/plantacoes', requireAuth, (req, res) => {
   res.json(plantacoes);
 });
 
-// API: Criar nova plantação
-app.post('/api/plantacoes', requireAuth, (req, res) => {
+// API: Criar nova plantação (especializado em café)
+app.post('/api/plantacoes', requireAuth, async (req, res) => {
   try {
-    const { nome, especie, variedade, area, latitude, longitude, cidade, estado, observacoes } = req.body;
+    const { 
+      nome, especie, variedade_cafe, fase_fenologica, area, 
+      latitude, longitude, cidade, estado, 
+      ph_solo, tipo_solo, data_plantio, ultima_adubacao,
+      observacoes 
+    } = req.body;
 
-    if (!nome || !especie || !area || !latitude || !longitude || !cidade || !estado) {
+    // Validação campos obrigatórios
+    if (!nome || !especie || !variedade_cafe || !fase_fenologica || !area || 
+        !latitude || !longitude || !cidade || !estado || !ph_solo || !tipo_solo || !data_plantio) {
       return res.status(400).json({ error: 'Campos obrigatórios não preenchidos' });
+    }
+
+    // Validação específica para café
+    if (especie !== 'cafe') {
+      return res.status(400).json({ error: 'Este sistema é especializado em cafeicultura. Apenas plantações de café são aceitas.' });
+    }
+
+    // Validação pH
+    const ph = parseFloat(ph_solo);
+    if (ph < 3.0 || ph > 9.0) {
+      return res.status(400).json({ error: 'pH do solo deve estar entre 3.0 e 9.0' });
     }
 
     const novaPlantacao = {
       usuario: req.session.user.id,
       nome: nome.trim(),
       especie,
-      variedade: variedade || '',
+      variedade_cafe, // Nova: variedade específica do café
+      fase_fenologica, // Nova: fase atual da planta
+      variedade: variedade_cafe, // Mantém compatibilidade
       area: parseFloat(area),
       localizacao: {
         latitude: parseFloat(latitude),
@@ -260,15 +376,59 @@ app.post('/api/plantacoes', requireAuth, (req, res) => {
         cidade: cidade.trim(),
         estado
       },
+      // Novos campos específicos para café
+      ph_solo: ph,
+      tipo_solo,
+      data_plantio: new Date(data_plantio),
+      ultima_adubacao: ultima_adubacao ? new Date(ultima_adubacao) : null,
       observacoes: observacoes || '',
       ativo: true,
       criadoEm: new Date()
     };
 
     const plantacao = simulatedDB.addPlantacao(novaPlantacao);
+    
+    // Gerar dados climáticos iniciais para a nova plantação
+    await simulatedDB.generateClimateDataForPlantacao(plantacao._id, 7);
+    
+    // Gerar recomendações automaticamente após criar plantação
+    try {
+      const CafeAlgorithm = require('./services/CafeAlgorithm');
+      const algoritmo = new CafeAlgorithm();
+      
+      // Buscar dados climáticos recém-criados
+      const dadosClimaticos = simulatedDB.findDadosClimaticosPorPlantacao(plantacao._id, 7);
+      
+      // Preparar dados do solo
+      const dadosSolo = {
+        ph: plantacao.ph_solo,
+        tipo_solo: plantacao.tipo_solo
+      };
+      
+      // Gerar recomendações usando algoritmo determinístico
+      const recomendacoes = algoritmo.gerarRecomendacoes(plantacao, dadosClimaticos, dadosSolo);
+      
+      // Salvar recomendações
+      recomendacoes.forEach(rec => {
+        const recomendacaoFormatada = algoritmo.formatarRecomendacao(rec, plantacao._id, req.session.user.id);
+        simulatedDB.addRecomendacao(recomendacaoFormatada);
+      });
+      
+      console.log(`${recomendacoes.length} recomendações automáticas geradas para ${plantacao.nome}`);
+    } catch (error) {
+      console.warn('Erro ao gerar recomendações automáticas:', error.message);
+      // Não falhar o cadastro se recomendações falharem
+    }
+    
     res.status(201).json({ 
-      message: 'Plantação cadastrada com sucesso!',
-      plantacao: { id: plantacao._id, nome: plantacao.nome }
+      message: 'Plantação de café cadastrada com sucesso!',
+      plantacao: { 
+        id: plantacao._id, 
+        nome: plantacao.nome,
+        variedade: plantacao.variedade_cafe,
+        fase: plantacao.fase_fenologica
+      },
+      recomendacoesGeradas: true // Indica que recomendações foram geradas automaticamente
     });
 
   } catch (error) {
@@ -423,9 +583,12 @@ app.get('/api/clima/resumo/:plantacaoId', requireAuth, (req, res) => {
   }
 });
 
-// API: Gerar recomendações (simulado)
+// API: Gerar recomendações (algoritmo determinístico para café)
 app.post('/api/recomendacoes/gerar', requireAuth, (req, res) => {
   try {
+    const CafeAlgorithm = require('./services/CafeAlgorithm');
+    const algoritmo = new CafeAlgorithm();
+    
     const usuarioId = req.session.user.id;
     const plantacoes = simulatedDB.findPlantacoesPorUsuario(usuarioId);
     
@@ -436,131 +599,79 @@ app.post('/api/recomendacoes/gerar', requireAuth, (req, res) => {
       });
     }
     
-    // Tipos de recomendações possíveis
-    const tiposRecomendacoes = [
-      {
-        tipo: 'irrigacao',
-        titulos: [
-          'Irrigação Necessária - Baixa Umidade',
-          'Ajuste na Irrigação - Déficit Hídrico',
-          'Irrigação Preventiva - Previsão de Seca'
-        ],
-        descricoes: [
-          'A precipitação dos últimos 7 dias está abaixo do ideal. Déficit hídrico detectado.',
-          'Baixa umidade do solo detectada. Plantas podem entrar em estresse hídrico.',
-          'Previsão meteorológica indica período seco. Irrigação preventiva recomendada.'
-        ],
-        acoes: [
-          'Aplicar irrigação de 15mm (aproximadamente 780 litros por hectare).',
-          'Aumentar frequência de irrigação para 3x por semana.',
-          'Aplicar irrigação suplementar de 10mm nas próximas 48h.'
-        ],
-        prioridades: ['alta', 'media', 'alta']
-      },
-      {
-        tipo: 'fertilizacao',
-        titulos: [
-          'Aplicação de Fertilizante NPK',
-          'Correção Nutricional - Deficiência de Potássio',
-          'Adubação Foliar Recomendada'
-        ],
-        descricoes: [
-          'Análise foliar indica necessidade de reposição nutricional.',
-          'Sintomas de deficiência nutricional observados nas folhas.',
-          'Período ideal para aplicação de fertilizante com base no ciclo da cultura.'
-        ],
-        acoes: [
-          'Aplicar 250kg/ha de fertilizante NPK 20-10-20.',
-          'Aplicar 150kg/ha de cloreto de potássio.',
-          'Realizar adubação foliar com micronutrientes.'
-        ],
-        prioridades: ['media', 'alta', 'baixa']
-      },
-      {
-        tipo: 'defensivos',
-        titulos: [
-          'Controle Preventivo de Pragas',
-          'Aplicação de Fungicida - Risco de Doenças',
-          'Monitoramento de Pragas Intensificado'
-        ],
-        descricoes: [
-          'Condições climáticas favorecem o desenvolvimento de pragas.',
-          'Alta umidade e temperatura podem propiciar doenças fúngicas.',
-          'Época do ano com maior incidência de pragas na região.'
-        ],
-        acoes: [
-          'Aplicar inseticida sistêmico conforme recomendação técnica.',
-          'Aplicar fungicida preventivo nas próximas 72h.',
-          'Intensificar monitoramento visual 2x por semana.'
-        ],
-        prioridades: ['media', 'alta', 'baixa']
-      },
-      {
-        tipo: 'manejo',
-        titulos: [
-          'Poda de Limpeza Recomendada',
-          'Controle de Ervas Daninhas',
-          'Análise de Solo Necessária'
-        ],
-        descricoes: [
-          'Período ideal para poda de limpeza e formação.',
-          'Crescimento acelerado de ervas daninhas detectado.',
-          'Última análise de solo realizada há mais de 6 meses.'
-        ],
-        acoes: [
-          'Realizar poda de limpeza removendo galhos secos e doentes.',
-          'Aplicar herbicida seletivo ou realizar capina manual.',
-          'Coletar amostras de solo para análise química.'
-        ],
-        prioridades: ['baixa', 'media', 'media']
-      }
-    ];
-    
-    let novasRecomendacoes = 0;
+    let totalRecomendacoes = 0;
+    let plantacoesAnalisadas = 0;
+    let erros = [];
     
     plantacoes.forEach(plantacao => {
-      // Gerar 1-3 recomendações por plantação
-      const numRecomendacoes = Math.floor(Math.random() * 3) + 1;
-      
-      for (let i = 0; i < numRecomendacoes; i++) {
-        // Escolher tipo de recomendação aleatório
-        const tipoEscolhido = tiposRecomendacoes[Math.floor(Math.random() * tiposRecomendacoes.length)];
-        const indiceVariacao = Math.floor(Math.random() * tipoEscolhido.titulos.length);
+      try {
+        // Verificar se é café
+        if (plantacao.especie !== 'cafe') {
+          return; // Pular plantações que não são café
+        }
         
-        // Calcular datas
-        const agora = new Date();
-        const dataRecomendada = new Date(agora.getTime() + (Math.random() * 3 + 1) * 24 * 60 * 60 * 1000); // 1-4 dias
-        const dataLimite = new Date(dataRecomendada.getTime() + (Math.random() * 7 + 3) * 24 * 60 * 60 * 1000); // 3-10 dias após recomendada
+        plantacoesAnalisadas++;
         
-        simulatedDB.addRecomendacao({
-          plantacao: plantacao._id,
-          usuario: usuarioId,
-          tipo: tipoEscolhido.tipo,
-          prioridade: tipoEscolhido.prioridades[indiceVariacao],
-          titulo: tipoEscolhido.titulos[indiceVariacao],
-          descricao: tipoEscolhido.descricoes[indiceVariacao],
-          acaoRecomendada: tipoEscolhido.acoes[indiceVariacao],
-          cronograma: {
-            dataRecomendada: dataRecomendada,
-            dataLimite: dataLimite
-          },
-          status: 'pendente',
-          criadaEm: new Date()
+        // Verificar se já existem recomendações pendentes recentes (últimas 24h)
+        const recomendacoesExistentes = simulatedDB.findRecomendacoesPorUsuario(usuarioId)
+          .filter(r => r.plantacao === plantacao._id && 
+                      r.status === 'pendente' &&
+                      (new Date() - new Date(r.criadaEm)) < 24 * 60 * 60 * 1000);
+        
+        if (recomendacoesExistentes.length > 0) {
+          console.log(`Plantação ${plantacao.nome} já possui recomendações recentes (${recomendacoesExistentes.length})`);
+          return; // Pular se já tem recomendações recentes
+        }
+        
+        // Buscar dados climáticos dos últimos 7 dias
+        const dadosClimaticos = simulatedDB.findDadosClimaticosPorPlantacao(plantacao._id, 7);
+        
+        // Preparar dados do solo
+        const dadosSolo = {
+          ph: plantacao.ph_solo || 6.0,
+          tipo_solo: plantacao.tipo_solo || 'medio'
+        };
+        
+        // Gerar recomendações usando algoritmo determinístico
+        const recomendacoes = algoritmo.gerarRecomendacoes(plantacao, dadosClimaticos, dadosSolo);
+        
+        // Salvar cada recomendação
+        recomendacoes.forEach(rec => {
+          const recomendacaoFormatada = algoritmo.formatarRecomendacao(rec, plantacao._id, usuarioId);
+          simulatedDB.addRecomendacao(recomendacaoFormatada);
+          totalRecomendacoes++;
         });
         
-        novasRecomendacoes++;
+      } catch (error) {
+        console.error(`Erro ao processar plantação ${plantacao.nome}:`, error);
+        erros.push(`${plantacao.nome}: ${error.message}`);
       }
     });
+    
+    let message = '';
+    if (totalRecomendacoes > 0) {
+      message = `${totalRecomendacoes} nova${totalRecomendacoes === 1 ? '' : 's'} recomendação${totalRecomendacoes === 1 ? '' : 'ões'} gerada${totalRecomendacoes === 1 ? '' : 's'} com sucesso!`;
+    } else if (plantacoesAnalisadas === 0) {
+      message = 'Nenhuma plantação de café encontrada. Este sistema é especializado em cafeicultura.';
+    } else {
+      message = 'Nenhuma recomendação nova gerada. Suas plantações já possuem recomendações recentes ou as condições estão adequadas.';
+    }
+    
+    if (erros.length > 0) {
+      message += ` Avisos: ${erros.join('; ')}`;
+    }
 
     res.json({ 
-      message: `${novasRecomendacoes} nova${novasRecomendacoes === 1 ? '' : 's'} recomendação${novasRecomendacoes === 1 ? '' : 'ões'} gerada${novasRecomendacoes === 1 ? '' : 's'} com sucesso!`,
-      totalRecomendacoes: novasRecomendacoes,
-      plantacoesAnalisadas: plantacoes.length
+      message,
+      totalRecomendacoes,
+      plantacoesAnalisadas,
+      algoritmo: 'deterministico_cafe_v1',
+      erros: erros.length > 0 ? erros : undefined
     });
     
   } catch (error) {
     console.error('Erro ao gerar recomendações:', error);
-    res.status(500).json({ error: 'Erro interno ao gerar recomendações' });
+    res.status(500).json({ error: 'Erro interno ao gerar recomendações: ' + error.message });
   }
 });
 
@@ -586,31 +697,118 @@ app.post('/api/recomendacoes/:id/aplicada', requireAuth, (req, res) => {
   });
 });
 
-// API: Atualizar dados climáticos (simulado)
-app.post('/api/clima/atualizar', requireAuth, (req, res) => {
+// API: Atualizar dados climáticos (INMET real + fallback simulado)
+app.post('/api/clima/atualizar', requireAuth, async (req, res) => {
   try {
-    // Simular atualização de dados climáticos
-    // Na implementação real, isso faria uma requisição para o INMET
+    const usuarioId = req.session.user.id;
+    const plantacoes = simulatedDB.findPlantacoesPorUsuario(usuarioId);
     
-    // Verificar se há plantações sem dados climáticos e gerar para elas
-    const plantacoes = simulatedDB.findPlantacoesPorUsuario(req.session.user.id);
+    if (plantacoes.length === 0) {
+      return res.json({ 
+        message: 'Nenhuma plantação encontrada.',
+        dadosAtualizados: 0
+      });
+    }
+
     let dadosAtualizados = 0;
+    let statusDetalhado = [];
     
-    plantacoes.forEach(plantacao => {
-      const dadosExistentes = simulatedDB.findDadosClimaticosPorPlantacao(plantacao._id, 1);
-      if (dadosExistentes.length === 0) {
-        simulatedDB.generateClimateDataForPlantacao(plantacao._id);
-        dadosAtualizados++;
+    for (const plantacao of plantacoes) {
+      try {
+        // Verificar se já existem dados climáticos recentes (últimas 24h)
+        const dadosExistentes = simulatedDB.findDadosClimaticosPorPlantacao(plantacao._id, 1);
+        const agora = new Date();
+        const ultimoRegistro = dadosExistentes[0];
+        
+        let precisaAtualizar = true;
+        if (ultimoRegistro) {
+          const horasDesdeUltimo = (agora - new Date(ultimoRegistro.data)) / (1000 * 60 * 60);
+          precisaAtualizar = horasDesdeUltimo > 12; // Atualizar a cada 12 horas
+        }
+        
+        if (precisaAtualizar) {
+          // Tentar buscar dados do INMET
+          await simulatedDB.generateClimateDataForPlantacao(plantacao._id, 7);
+          dadosAtualizados++;
+          
+          statusDetalhado.push({
+            plantacao: plantacao.nome,
+            status: 'atualizado',
+            fonte: 'inmet_ou_simulado'
+          });
+        } else {
+          statusDetalhado.push({
+            plantacao: plantacao.nome,
+            status: 'dados_recentes',
+            ultimaAtualizacao: ultimoRegistro.data
+          });
+        }
+      } catch (error) {
+        console.error(`Erro ao atualizar dados da plantação ${plantacao.nome}:`, error);
+        statusDetalhado.push({
+          plantacao: plantacao.nome,
+          status: 'erro',
+          erro: error.message
+        });
       }
+    }
+
+    res.json({ 
+      message: `Dados climáticos atualizados para ${dadosAtualizados} plantação${dadosAtualizados === 1 ? '' : 'ões'}!`,
+      dadosAtualizados,
+      totalPlantacoes: plantacoes.length,
+      detalhes: statusDetalhado
     });
     
-    res.json({ 
-      message: `Dados climáticos atualizados com sucesso! ${dadosAtualizados > 0 ? `Gerados dados para ${dadosAtualizados} plantações.` : '(simulado)'}`,
-      dadosSalvos: dadosAtualizados || Math.floor(Math.random() * 5) + 1
-    });
   } catch (error) {
     console.error('Erro ao atualizar dados climáticos:', error);
-    res.status(500).json({ error: 'Erro ao atualizar dados climáticos' });
+    res.status(500).json({ error: 'Erro interno ao atualizar dados climáticos' });
+  }
+});
+
+// API: Testar conexão com INMET
+app.get('/api/clima/testar-inmet', requireAuth, async (req, res) => {
+  try {
+    const InmetService = require('./services/InmetService');
+    
+    // Coordenadas de exemplo (Brasília)
+    const latitude = -15.7801;
+    const longitude = -47.9292;
+    
+    console.log('Testando conexão com INMET...');
+    
+    // Buscar estações próximas
+    const estacoes = await InmetService.buscarEstacoes(latitude, longitude, 100);
+    
+    if (estacoes.length > 0) {
+      const estacaoTeste = estacoes[0];
+      console.log(`Testando estação: ${estacaoTeste.nome}`);
+      
+      // Buscar dados recentes
+      const dadosRecentes = await InmetService.buscarDadosRecentes(estacaoTeste.codigo);
+      
+      res.json({
+        status: 'sucesso',
+        message: 'Conexão com INMET funcionando!',
+        estacao: estacaoTeste,
+        dadosRecentes,
+        totalEstacoes: estacoes.length
+      });
+    } else {
+      res.json({
+        status: 'sem_estacoes',
+        message: 'Nenhuma estação INMET encontrada na região',
+        coordenadas: { latitude, longitude }
+      });
+    }
+    
+  } catch (error) {
+    console.error('Erro ao testar INMET:', error);
+    res.json({
+      status: 'erro',
+      message: 'Erro ao conectar com INMET, usando dados simulados',
+      erro: error.message
+    });
   }
 });
 
