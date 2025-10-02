@@ -1,0 +1,39 @@
+{
+  "name": "conecta-engenharias-agro",
+  "version": "1.0.0",
+  "description": "Sistema de recomendações agrícolas baseado em dados climáticos do INMET",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app-simple.js",
+    "dev": "nodemon src/app-simple.js",
+    "start-full": "node src/app.js",
+    "dev-full": "nodemon src/app.js",
+    "init-db": "node init-db.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "agricultura",
+    "clima",
+    "inmet",
+    "recomendacoes",
+    "mvc"
+  ],
+  "author": "Felipe Soares",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.5.0",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "express-ejs-layouts": "^2.5.1",
+    "express-session": "^1.17.3",
+    "jsonwebtoken": "^9.0.2",
+    "moment": "^2.29.4",
+    "mongoose": "^7.5.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

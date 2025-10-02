@@ -1,0 +1,21 @@
+<div style="text-align: center; padding: 4rem 2rem;">
+    <h1 style="color: var(--danger-color); margin-bottom: 1rem;">Erro Interno</h1>
+    <p style="color: #6c757d; margin-bottom: 2rem;">
+        <%= message || 'Ocorreu um erro interno no servidor. Tente novamente mais tarde.' %>
+    </p>
+    
+    <% if (process.env.NODE_ENV === 'development' && error) { %>
+        <div class="card" style="max-width: 800px; margin: 2rem auto; text-align: left;">
+            <div class="card-header">
+                <h3>Detalhes do Erro (Desenvolvimento)</h3>
+            </div>
+            <div class="card-body">
+                <pre style="background: #f8f9fa; padding: 1rem; border-radius: 0.25rem; overflow-x: auto;">
+<%= error.stack %>
+                </pre>
+            </div>
+        </div>
+    <% } %>
+    
+    <a href="/" class="btn btn-primary">Voltar ao Dashboard</a>
+</div>

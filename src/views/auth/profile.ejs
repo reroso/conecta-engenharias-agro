@@ -1,0 +1,269 @@
+<div class="page-header">
+    <h1 class="page-title">Meu Perfil</h1>
+    <p class="breadcrumb">Gerencie suas informações pessoais</p>
+</div>
+
+<div class="grid grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3>Informações Pessoais</h3>
+        </div>
+        <div class="card-body">
+            <form id="perfilForm">
+                <div class="form-group">
+                    <label for="nome" class="form-label">Nome Completo</label>
+                    <input type="text" id="nome" name="nome" class="form-input" required 
+                           value="<%= user.nome %>">
+                </div>
+                
+                <div class="form-group">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" id="email" name="email" class="form-input" required 
+                           value="<%= user.email %>" readonly>
+                    <small class="text-muted">O email não pode ser alterado</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="telefone" class="form-label">Telefone</label>
+                    <input type="tel" id="telefone" name="telefone" class="form-input" 
+                           placeholder="(11) 99999-9999">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cidade" class="form-label">Cidade</label>
+                        <input type="text" id="cidade" name="cidade" class="form-input" 
+                               placeholder="Sua cidade">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="estado" class="form-label">Estado</label>
+                        <select id="estado" name="estado" class="form-select">
+                            <option value="">Selecione</option>
+                            <option value="AC">Acre</option>
+                            <option value="AL">Alagoas</option>
+                            <option value="AP">Amapá</option>
+                            <option value="AM">Amazonas</option>
+                            <option value="BA">Bahia</option>
+                            <option value="CE">Ceará</option>
+                            <option value="DF">Distrito Federal</option>
+                            <option value="ES">Espírito Santo</option>
+                            <option value="GO">Goiás</option>
+                            <option value="MA">Maranhão</option>
+                            <option value="MT">Mato Grosso</option>
+                            <option value="MS">Mato Grosso do Sul</option>
+                            <option value="MG">Minas Gerais</option>
+                            <option value="PA">Pará</option>
+                            <option value="PB">Paraíba</option>
+                            <option value="PR">Paraná</option>
+                            <option value="PE">Pernambuco</option>
+                            <option value="PI">Piauí</option>
+                            <option value="RJ">Rio de Janeiro</option>
+                            <option value="RN">Rio Grande do Norte</option>
+                            <option value="RS">Rio Grande do Sul</option>
+                            <option value="RO">Rondônia</option>
+                            <option value="RR">Roraima</option>
+                            <option value="SC">Santa Catarina</option>
+                            <option value="SP">São Paulo</option>
+                            <option value="SE">Sergipe</option>
+                            <option value="TO">Tocantins</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h3>Alterar Senha</h3>
+        </div>
+        <div class="card-body">
+            <form id="senhaForm">
+                <div class="form-group">
+                    <label for="senhaAtual" class="form-label">Senha Atual</label>
+                    <input type="password" id="senhaAtual" name="senhaAtual" class="form-input" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="novaSenha" class="form-label">Nova Senha</label>
+                    <input type="password" id="novaSenha" name="novaSenha" class="form-input" 
+                           required minlength="6">
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirmarSenha" class="form-label">Confirmar Nova Senha</label>
+                    <input type="password" id="confirmarSenha" name="confirmarSenha" class="form-input" 
+                           required>
+                </div>
+                
+                <button type="submit" class="btn btn-warning">Alterar Senha</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Estatísticas da Conta</h3>
+    </div>
+    <div class="card-body">
+        <div id="estatisticasPerfil">
+            <div class="loading">Carregando estatísticas...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadUserData();
+    loadAccountStats();
+    
+    document.getElementById('perfilForm').addEventListener('submit', updateProfile);
+    document.getElementById('senhaForm').addEventListener('submit', changePassword);
+});
+
+function loadUserData() {
+    // Simular carregamento de dados adicionais do usuário
+    // Na implementação real, faria uma requisição para /api/user/profile
+    
+    // Por enquanto, apenas dados básicos estão disponíveis
+    console.log('Dados do usuário carregados');
+}
+
+function loadAccountStats() {
+    // Simular estatísticas da conta
+    const stats = {
+        plantacoesCadastradas: 3,
+        recomendacoesRecebidas: 25,
+        recomendacoesAplicadas: 18,
+        diasNoSistema: 45
+    };
+    
+    const html = `
+        <div class="grid grid-4">
+            <div class="stat-card">
+                <div class="stat-number">${stats.plantacoesCadastradas}</div>
+                <div class="stat-label">Plantações</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.recomendacoesRecebidas}</div>
+                <div class="stat-label">Recomendações Recebidas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.recomendacoesAplicadas}</div>
+                <div class="stat-label">Recomendações Aplicadas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.diasNoSistema}</div>
+                <div class="stat-label">Dias no Sistema</div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 2rem;">
+            <h4>Taxa de Sucesso</h4>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: ${(stats.recomendacoesAplicadas / stats.recomendacoesRecebidas * 100).toFixed(0)}%"></div>
+            </div>
+            <small class="text-muted">
+                ${(stats.recomendacoesAplicadas / stats.recomendacoesRecebidas * 100).toFixed(0)}% das recomendações foram aplicadas
+            </small>
+        </div>
+    `;
+    
+    document.getElementById('estatisticasPerfil').innerHTML = html;
+}
+
+async function updateProfile(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData.entries());
+    
+    try {
+        window.agroApp.showLoading('Atualizando perfil...');
+        
+        // Simular atualização (na implementação real seria /api/user/profile)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        window.agroApp.hideLoading();
+        window.agroApp.showToast('Perfil atualizado com sucesso!', 'success');
+        
+    } catch (error) {
+        window.agroApp.hideLoading();
+        window.agroApp.showToast('Erro ao atualizar perfil', 'error');
+        console.error('Erro:', error);
+    }
+}
+
+async function changePassword(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData.entries());
+    
+    if (data.novaSenha !== data.confirmarSenha) {
+        window.agroApp.showToast('As senhas não coincidem', 'error');
+        return;
+    }
+    
+    try {
+        window.agroApp.showLoading('Alterando senha...');
+        
+        // Simular alteração de senha (na implementação real seria /api/user/change-password)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        window.agroApp.hideLoading();
+        window.agroApp.showToast('Senha alterada com sucesso!', 'success');
+        
+        // Limpar formulário
+        e.target.reset();
+        
+    } catch (error) {
+        window.agroApp.hideLoading();
+        window.agroApp.showToast('Erro ao alterar senha', 'error');
+        console.error('Erro:', error);
+    }
+}
+</script>
+
+<style>
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background-color: #e9ecef;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 0.5rem 0;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #28a745, #20c997);
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+.stat-card {
+    text-align: center;
+    padding: 1.5rem;
+    background: #f8f9fa;
+    border-radius: 0.5rem;
+    border: 1px solid #e9ecef;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--primary-color);
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.stat-label {
+    color: #6c757d;
+    font-size: 0.875rem;
+}
+</style>

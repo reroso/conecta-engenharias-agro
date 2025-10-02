@@ -1,0 +1,521 @@
+<div class="page-header">
+    <h1 class="page-title">Recomendações</h1>
+    <p class="breadcrumb">Gerencie suas recomendações agrícolas</p>
+    <button onclick="generateRecommendations()" class="btn btn-primary">
+        ✨ Gerar Novas Recomendações
+    </button>
+</div>
+
+<div class="grid grid-3">
+    <div class="card">
+        <div class="card-header">
+            <h3>Filtros</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label for="plantacaoFilter" class="form-label">Plantação</label>
+                <select id="plantacaoFilter" class="form-select">
+                    <option value="">Todas as plantações</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="statusFilter" class="form-label">Status</label>
+                <select id="statusFilter" class="form-select">
+                    <option value="">Todos os status</option>
+                    <option value="pendente">Pendente</option>
+                    <option value="concluida">Concluída</option>
+                    <option value="vencida">Vencida</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="prioridadeFilter" class="form-label">Prioridade</label>
+                <select id="prioridadeFilter" class="form-select">
+                    <option value="">Todas as prioridades</option>
+                    <option value="baixa">Baixa</option>
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                    <option value="urgente">Urgente</option>
+                </select>
+            </div>
+            
+            <button onclick="applyFilters()" class="btn btn-secondary" style="width: 100%;">
+                Aplicar Filtros
+            </button>
+        </div>
+    </div>
+    
+    <div class="card" style="grid-column: span 2;">
+        <div class="card-header">
+            <h3>Estatísticas</h3>
+        </div>
+        <div class="card-body">
+            <div id="estatisticasRecomendacoes">
+                <div class="loading">Carregando estatísticas...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Recomendações</h3>
+        <div class="card-actions">
+            <select id="ordenacao" class="form-select" style="width: auto;">
+                <option value="data">Ordenar por Data</option>
+                <option value="prioridade">Ordenar por Prioridade</option>
+                <option value="status">Ordenar por Status</option>
+            </select>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="recomendacoesList">
+            <div class="loading">Carregando recomendações...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para detalhes da recomendação -->
+<div id="recomendacaoModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modalTitle">Detalhes da Recomendação</h3>
+            <button onclick="closeModal()" class="btn btn-ghost">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <!-- Conteúdo será preenchido dinamicamente -->
+        </div>
+        <div class="modal-footer">
+            <button onclick="closeModal()" class="btn btn-secondary">Fechar</button>
+            <button id="marcarAplicadaBtn" onclick="marcarComoAplicada()" class="btn btn-success">
+                Marcar como Aplicada
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+let todasRecomendacoes = [];
+let recomendacoesFiltradas = [];
+let currentRecomendacao = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadPlantacoes();
+    loadRecomendacoes();
+    
+    // Event listeners para filtros
+    document.getElementById('statusFilter').addEventListener('change', applyFilters);
+    document.getElementById('prioridadeFilter').addEventListener('change', applyFilters);
+    document.getElementById('plantacaoFilter').addEventListener('change', applyFilters);
+    document.getElementById('ordenacao').addEventListener('change', applyFilters);
+});
+
+async function loadPlantacoes() {
+    try {
+        const response = await fetch('/api/plantacoes');
+        const plantacoes = await response.json();
+        
+        const select = document.getElementById('plantacaoFilter');
+        select.innerHTML = '<option value="">Todas as plantações</option>' +
+            plantacoes.map(p => `<option value="${p._id}">${p.nome}</option>`).join('');
+            
+    } catch (error) {
+        console.error('Erro ao carregar plantações:', error);
+    }
+}
+
+async function loadRecomendacoes() {
+    try {
+        // Carregar estatísticas
+        const dashboardResponse = await fetch('/api/recomendacoes/dashboard');
+        const dashboardData = await dashboardResponse.json();
+        updateEstatisticas(dashboardData.estatisticas);
+        
+        // Carregar todas as recomendações
+        const response = await fetch('/api/recomendacoes');
+        todasRecomendacoes = await response.json();
+        
+        applyFilters();
+        
+    } catch (error) {
+        console.error('Erro ao carregar recomendações:', error);
+        document.getElementById('recomendacoesList').innerHTML = 
+            '<div class="text-danger">Erro ao carregar recomendações</div>';
+    }
+}
+
+function updateEstatisticas(stats) {
+    const container = document.getElementById('estatisticasRecomendacoes');
+    
+    const html = `
+        <div class="grid grid-4">
+            <div class="stat-card">
+                <div class="stat-number">${stats.total}</div>
+                <div class="stat-label">Total</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.porStatus.find(s => s._id === 'pendente')?.count || 0}</div>
+                <div class="stat-label">Pendentes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.porStatus.find(s => s._id === 'concluida')?.count || 0}</div>
+                <div class="stat-label">Concluídas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.porStatus.find(s => s._id === 'vencida')?.count || 0}</div>
+                <div class="stat-label">Vencidas</div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+function applyFilters() {
+    const statusFilter = document.getElementById('statusFilter').value;
+    const prioridadeFilter = document.getElementById('prioridadeFilter').value;
+    const plantacaoFilter = document.getElementById('plantacaoFilter').value;
+    const ordenacao = document.getElementById('ordenacao').value;
+    
+    recomendacoesFiltradas = todasRecomendacoes.filter(rec => {
+        if (statusFilter && rec.status !== statusFilter) return false;
+        if (prioridadeFilter && rec.prioridade !== prioridadeFilter) return false;
+        if (plantacaoFilter && rec.plantacaoId !== plantacaoFilter) return false;
+        return true;
+    });
+    
+    // Ordenar
+    recomendacoesFiltradas.sort((a, b) => {
+        switch (ordenacao) {
+            case 'prioridade':
+                const prioridadeOrder = { 'urgente': 4, 'alta': 3, 'media': 2, 'baixa': 1 };
+                return prioridadeOrder[b.prioridade] - prioridadeOrder[a.prioridade];
+            case 'status':
+                return a.status.localeCompare(b.status);
+            case 'data':
+            default:
+                return new Date(a.dataLimite) - new Date(b.dataLimite);
+        }
+    });
+    
+    renderRecomendacoes();
+}
+
+function renderRecomendacoes() {
+    const container = document.getElementById('recomendacoesList');
+    
+    if (recomendacoesFiltradas.length === 0) {
+        container.innerHTML = `
+            <div class="text-center">
+                <p class="text-muted">Nenhuma recomendação encontrada com os filtros aplicados.</p>
+                <button onclick="generateRecommendations()" class="btn btn-primary">
+                    Gerar Recomendações
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    const html = recomendacoesFiltradas.map(rec => `
+        <div class="recomendacao-card priority-${rec.prioridade} status-${rec.status}" 
+             onclick="showRecomendacaoDetails('${rec.id}')">
+            <div class="recomendacao-header">
+                <h5 class="recomendacao-title">${rec.titulo}</h5>
+                <div class="recomendacao-badges">
+                    <span class="badge badge-${getPriorityClass(rec.prioridade)}">${rec.prioridade.toUpperCase()}</span>
+                    <span class="badge badge-${getStatusClass(rec.status)}">${rec.status.toUpperCase()}</span>
+                </div>
+            </div>
+            <div class="recomendacao-meta">
+                <strong>Plantação:</strong> ${rec.plantacao}<br>
+                <strong>Prazo:</strong> ${formatDate(rec.dataLimite)} 
+                ${rec.diasRestantes ? `(${rec.diasRestantes.dias > 0 ? rec.diasRestantes.dias + ' dias' : 'Vencida'})` : ''}
+            </div>
+            <div class="recomendacao-actions" onclick="event.stopPropagation()">
+                ${rec.status === 'pendente' ? `
+                    <button onclick="markAsApplied('${rec.id}')" class="btn btn-success btn-sm">
+                        ✓ Aplicar
+                    </button>
+                ` : ''}
+                <button onclick="showRecomendacaoDetails('${rec.id}')" class="btn btn-info btn-sm">
+                    👁 Detalhes
+                </button>
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+}
+
+function showRecomendacaoDetails(recomendacaoId) {
+    currentRecomendacao = todasRecomendacoes.find(r => r.id === recomendacaoId);
+    if (!currentRecomendacao) return;
+    
+    document.getElementById('modalTitle').textContent = currentRecomendacao.titulo;
+    
+    const modalBody = document.getElementById('modalBody');
+    modalBody.innerHTML = `
+        <div class="recomendacao-details">
+            <div class="detail-section">
+                <h4>Informações Gerais</h4>
+                <p><strong>Plantação:</strong> ${currentRecomendacao.plantacao}</p>
+                <p><strong>Tipo:</strong> ${currentRecomendacao.tipo || 'Não especificado'}</p>
+                <p><strong>Prioridade:</strong> 
+                    <span class="badge badge-${getPriorityClass(currentRecomendacao.prioridade)}">
+                        ${currentRecomendacao.prioridade.toUpperCase()}
+                    </span>
+                </p>
+                <p><strong>Status:</strong> 
+                    <span class="badge badge-${getStatusClass(currentRecomendacao.status)}">
+                        ${currentRecomendacao.status.toUpperCase()}
+                    </span>
+                </p>
+                <p><strong>Data Limite:</strong> ${formatDate(currentRecomendacao.dataLimite)}</p>
+            </div>
+            
+            <div class="detail-section">
+                <h4>Descrição</h4>
+                <p>${currentRecomendacao.descricao || 'Sem descrição disponível.'}</p>
+            </div>
+            
+            <div class="detail-section">
+                <h4>Ação Recomendada</h4>
+                <p>${currentRecomendacao.acaoRecomendada || 'Nenhuma ação específica definida.'}</p>
+            </div>
+        </div>
+    `;
+    
+    // Mostrar/esconder botão de marcar como aplicada
+    const marcarBtn = document.getElementById('marcarAplicadaBtn');
+    marcarBtn.style.display = currentRecomendacao.status === 'pendente' ? 'block' : 'none';
+    
+    document.getElementById('recomendacaoModal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('recomendacaoModal').style.display = 'none';
+    currentRecomendacao = null;
+}
+
+async function markAsApplied(recomendacaoId) {
+    if (!recomendacaoId) recomendacaoId = currentRecomendacao?.id;
+    
+    try {
+        const response = await fetch(`/api/recomendacoes/${recomendacaoId}/aplicada`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ observacoes: '' })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            window.agroApp.showToast(result.message, 'success');
+            loadRecomendacoes(); // Recarregar lista
+            closeModal();
+        } else {
+            window.agroApp.showToast(result.error || 'Erro ao marcar recomendação', 'error');
+        }
+        
+    } catch (error) {
+        window.agroApp.showToast('Erro ao marcar recomendação como aplicada', 'error');
+        console.error('Erro:', error);
+    }
+}
+
+function marcarComoAplicada() {
+    markAsApplied();
+}
+
+async function generateRecommendations() {
+    try {
+        if (window.agroApp && window.agroApp.showLoading) {
+            window.agroApp.showLoading('Gerando recomendações...');
+        }
+        
+        const response = await fetch('/api/recomendacoes/gerar', { method: 'POST' });
+        const result = await response.json();
+        
+        if (window.agroApp && window.agroApp.hideLoading) {
+            window.agroApp.hideLoading();
+        }
+        
+        if (response.ok) {
+            if (window.agroApp && window.agroApp.showToast) {
+                window.agroApp.showToast(result.message, 'success');
+            } else {
+                alert(result.message);
+            }
+            loadRecomendacoes();
+        } else {
+            if (window.agroApp && window.agroApp.showToast) {
+                window.agroApp.showToast(result.error || 'Erro ao gerar recomendações', 'error');
+            } else {
+                alert(result.error || 'Erro ao gerar recomendações');
+            }
+        }
+        
+    } catch (error) {
+        if (window.agroApp && window.agroApp.hideLoading) {
+            window.agroApp.hideLoading();
+        }
+        if (window.agroApp && window.agroApp.showToast) {
+            window.agroApp.showToast('Erro ao gerar recomendações', 'error');
+        } else {
+            alert('Erro ao gerar recomendações');
+        }
+        console.error('Erro:', error);
+    }
+}
+
+function getPriorityClass(priority) {
+    const classes = {
+        'baixa': 'success',
+        'media': 'warning',
+        'alta': 'danger',
+        'urgente': 'danger'
+    };
+    return classes[priority] || 'secondary';
+}
+
+function getStatusClass(status) {
+    const classes = {
+        'pendente': 'warning',
+        'concluida': 'success',
+        'vencida': 'danger'
+    };
+    return classes[status] || 'secondary';
+}
+
+function formatDate(dateString) {
+    return new Date(dateString).toLocaleDateString('pt-BR');
+}
+
+// Fechar modal ao clicar fora
+window.onclick = function(event) {
+    const modal = document.getElementById('recomendacaoModal');
+    if (event.target === modal) {
+        closeModal();
+    }
+}
+</script>
+
+<style>
+.recomendacao-card {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: white;
+}
+
+.recomendacao-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.recomendacao-card.priority-urgente {
+    border-left: 4px solid #dc3545;
+}
+
+.recomendacao-card.priority-alta {
+    border-left: 4px solid #fd7e14;
+}
+
+.recomendacao-card.priority-media {
+    border-left: 4px solid #ffc107;
+}
+
+.recomendacao-card.priority-baixa {
+    border-left: 4px solid #28a745;
+}
+
+.recomendacao-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.recomendacao-title {
+    margin: 0;
+    color: #2d3748;
+}
+
+.recomendacao-badges {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.recomendacao-meta {
+    margin-bottom: 1rem;
+    color: #6c757d;
+    line-height: 1.6;
+}
+
+.recomendacao-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background-color: white;
+    border-radius: 0.5rem;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    border-top: 1px solid #dee2e6;
+}
+
+.detail-section {
+    margin-bottom: 1.5rem;
+}
+
+.detail-section h4 {
+    color: #2d3748;
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+</style>

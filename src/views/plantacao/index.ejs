@@ -1,0 +1,81 @@
+<div class="page-header">
+    <h1 class="page-title">Plantações</h1>
+    <p class="breadcrumb">Gerencie suas plantações</p>
+    <a href="/plantacao/nova" class="btn btn-primary">Nova Plantação</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Suas Plantações</h3>
+    </div>
+    <div class="card-body">
+        <div id="plantacoesList">
+            <div class="loading">Carregando plantações...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadPlantacoes();
+});
+
+async function loadPlantacoes() {
+    try {
+        const response = await fetch('/api/plantacoes');
+        const plantacoes = await response.json();
+        
+        const container = document.getElementById('plantacoesList');
+        
+        if (plantacoes.length === 0) {
+            container.innerHTML = `
+                <div class="text-center">
+                    <p class="text-muted">Nenhuma plantação cadastrada ainda.</p>
+                    <a href="/plantacao/nova" class="btn btn-primary">Criar Primeira Plantação</a>
+                </div>
+            `;
+            return;
+        }
+        
+        const html = plantacoes.map(plantacao => `
+            <div class="plantacao-card">
+                <div class="card-body">
+                    <h5>${plantacao.nome}</h5>
+                    <p><strong>Espécie:</strong> ${plantacao.especie} - ${plantacao.variedade}</p>
+                    <p><strong>Localização:</strong> ${plantacao.localizacao.cidade}, ${plantacao.localizacao.estado}</p>
+                    <p><strong>Área:</strong> ${plantacao.area} hectares</p>
+                    <div class="plantacao-actions">
+                        <a href="/clima?plantacao=${plantacao._id}" class="btn btn-info btn-sm">Ver Clima</a>
+                        <a href="/recomendacao?plantacao=${plantacao._id}" class="btn btn-success btn-sm">Recomendações</a>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        container.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Erro ao carregar plantações:', error);
+        document.getElementById('plantacoesList').innerHTML = 
+            '<div class="text-danger">Erro ao carregar plantações</div>';
+    }
+}
+</script>
+
+<style>
+.plantacao-card {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    margin-bottom: 1rem;
+}
+
+.plantacao-actions {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.plantacao-actions .btn {
+    flex: 1;
+}
+</style>

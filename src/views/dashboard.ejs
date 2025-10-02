@@ -1,0 +1,327 @@
+<div class="page-header">
+    <h1 class="page-title">Dashboard</h1>
+    <p class="breadcrumb">Visão geral do sistema</p>
+</div>
+
+<!-- Dashboard Statistics -->
+<div class="dashboard-stats">
+    <div class="stat-card">
+        <span class="stat-number" id="totalPlantacoes">-</span>
+        <div class="stat-label">Plantações Ativas</div>
+    </div>
+    
+    <div class="stat-card">
+        <span class="stat-number" id="recomendacoesPendentes">-</span>
+        <div class="stat-label">Recomendações Pendentes</div>
+    </div>
+    
+    <div class="stat-card">
+        <span class="stat-number" id="alertasAtivos">-</span>
+        <div class="stat-label">Alertas Ativos</div>
+    </div>
+    
+    <div class="stat-card">
+        <span class="stat-number" id="atualizacoesHoje">-</span>
+        <div class="stat-label">Atualizações Hoje</div>
+    </div>
+</div>
+
+<div class="dashboard-content">
+    <!-- Main Content Area -->
+    <div class="dashboard-main">
+        <!-- Recent Recommendations -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Recomendações Recentes</h3>
+                <a href="/recomendacao" class="btn btn-outline btn-sm">Ver Todas</a>
+            </div>
+            <div class="card-body">
+                <div id="recentRecommendations">
+                    <div class="loading">Carregando recomendações...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Climate Overview -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Resumo Climático</h3>
+                <button onclick="updateAllClimateData()" class="btn btn-primary btn-sm">
+                    Atualizar Dados
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="climateOverview">
+                    <div class="loading">Carregando dados climáticos...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="dashboard-sidebar">
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Ações Rápidas</h3>
+            </div>
+            <div class="card-body">
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <a href="/plantacao/nova" class="btn btn-primary">Nova Plantação</a>
+                    <button onclick="generateAllRecommendations()" class="btn btn-success">
+                        Gerar Recomendações
+                    </button>
+                    <a href="/clima" class="btn btn-info">Ver Dados Climáticos</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recommendations Chart -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Status Recomendações</h3>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" style="height: 250px;">
+                    <canvas id="recomendacoesChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Weather Alerts -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Alertas Climáticos</h3>
+            </div>
+            <div class="card-body">
+                <div id="weatherAlerts">
+                    <div class="text-muted text-center">Nenhum alerta ativo</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Dashboard specific JavaScript
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+    loadRecentRecommendations();
+    loadClimateOverview();
+    loadWeatherAlerts();
+});
+
+async function loadDashboardData() {
+    try {
+        const response = await fetch('/api/recomendacoes/dashboard');
+        const data = await response.json();
+        
+        // Update statistics
+        document.getElementById('recomendacoesPendentes').textContent = 
+            data.estatisticas.porStatus.find(s => s._id === 'pendente')?.count || 0;
+            
+        document.getElementById('alertasAtivos').textContent = data.urgentes.length;
+        
+        // Load plantações count
+        const plantacoesResponse = await fetch('/api/plantacoes');
+        const plantacoes = await plantacoesResponse.json();
+        document.getElementById('totalPlantacoes').textContent = plantacoes.length;
+        
+        // Simular atualizações hoje (seria calculado no backend)
+        document.getElementById('atualizacoesHoje').textContent = Math.floor(Math.random() * 10) + 1;
+        
+    } catch (error) {
+        console.error('Erro ao carregar dados do dashboard:', error);
+    }
+}
+
+async function loadRecentRecommendations() {
+    try {
+        const response = await fetch('/api/recomendacoes/dashboard');
+        const data = await response.json();
+        
+        const container = document.getElementById('recentRecommendations');
+        
+        if (data.urgentes.length === 0) {
+            container.innerHTML = '<div class="text-muted text-center">Nenhuma recomendação urgente</div>';
+            return;
+        }
+        
+        const html = data.urgentes.slice(0, 5).map(rec => `
+            <div class="recommendation-card priority-${rec.prioridade}" data-recomendacao="${rec.id}">
+                <div class="card-body" style="padding: 1rem;">
+                    <div class="recommendation-header">
+                        <h5 class="recommendation-title">${rec.titulo}</h5>
+                        <span class="badge badge-${getPriorityClass(rec.prioridade)}">${rec.prioridade.toUpperCase()}</span>
+                    </div>
+                    <div class="recommendation-meta">
+                        <strong>Plantação:</strong> ${rec.plantacao} | 
+                        <strong>Prazo:</strong> ${formatDate(rec.dataLimite)} 
+                        (${rec.diasRestantes.dias} dias)
+                    </div>
+                    <div class="recommendation-actions">
+                        <button onclick="markRecommendationApplied('${rec.id}')" class="btn btn-success btn-sm">
+                            Marcar como Aplicada
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        container.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Erro ao carregar recomendações:', error);
+        document.getElementById('recentRecommendations').innerHTML = 
+            '<div class="text-danger">Erro ao carregar recomendações</div>';
+    }
+}
+
+async function loadClimateOverview() {
+    try {
+        // Buscar plantações do usuário
+        const plantacoesResponse = await fetch('/api/plantacoes');
+        const plantacoes = await plantacoesResponse.json();
+        
+        if (plantacoes.length === 0) {
+            document.getElementById('climateOverview').innerHTML = 
+                '<div class="text-muted">Nenhuma plantação cadastrada</div>';
+            return;
+        }
+        
+        // Buscar resumo climático da primeira plantação (exemplo)
+        const resumoResponse = await fetch(`/api/clima/resumo/${plantacoes[0]._id}`);
+        const resumo = await resumoResponse.json();
+        
+        if (!resumo.dados) {
+            document.getElementById('climateOverview').innerHTML = 
+                '<div class="text-muted">Nenhum dado climático disponível</div>';
+            return;
+        }
+        
+        const html = `
+            <div class="grid grid-3">
+                <div class="text-center">
+                    <div style="font-size: 2rem; color: #ff6b35;">
+                        ${resumo.temperatura.media ? resumo.temperatura.media.toFixed(1) : '-'}°C
+                    </div>
+                    <div class="text-muted">Temperatura Média</div>
+                </div>
+                <div class="text-center">
+                    <div style="font-size: 2rem; color: #17a2b8;">
+                        ${resumo.precipitacao.total.toFixed(1)}mm
+                    </div>
+                    <div class="text-muted">Chuva (7 dias)</div>
+                </div>
+                <div class="text-center">
+                    <div style="font-size: 2rem; color: #28a745;">
+                        ${resumo.umidade.media ? resumo.umidade.media.toFixed(0) : '-'}%
+                    </div>
+                    <div class="text-muted">Umidade Média</div>
+                </div>
+            </div>
+            <div class="mt-2">
+                <small class="text-muted">
+                    Dados dos últimos ${resumo.periodo.diasComDados} dias | 
+                    Última atualização: ${formatDate(resumo.dadoMaisRecente.data)}
+                </small>
+            </div>
+        `;
+        
+        document.getElementById('climateOverview').innerHTML = html;
+        
+    } catch (error) {
+        console.error('Erro ao carregar resumo climático:', error);
+        document.getElementById('climateOverview').innerHTML = 
+            '<div class="text-danger">Erro ao carregar dados climáticos</div>';
+    }
+}
+
+function loadWeatherAlerts() {
+    // Simular alertas climáticos (seria implementado com dados reais)
+    const alerts = [
+        { type: 'warning', message: 'Baixa umidade prevista para os próximos dias' },
+        { type: 'info', message: 'Chuvas moderadas esperadas na próxima semana' }
+    ];
+    
+    const container = document.getElementById('weatherAlerts');
+    
+    if (alerts.length === 0) {
+        container.innerHTML = '<div class="text-muted text-center">Nenhum alerta ativo</div>';
+        return;
+    }
+    
+    const html = alerts.map(alert => `
+        <div class="alert alert-${alert.type}" style="padding: 0.75rem; margin-bottom: 0.5rem;">
+            ${alert.message}
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+}
+
+function updateAllClimateData() {
+    window.agroApp.showLoading('Atualizando dados climáticos...');
+    
+    fetch('/api/clima/atualizar', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            window.agroApp.hideLoading();
+            window.agroApp.showToast(data.message, 'success');
+            loadClimateOverview();
+        })
+        .catch(error => {
+            window.agroApp.hideLoading();
+            window.agroApp.showToast('Erro ao atualizar dados climáticos', 'error');
+        });
+}
+
+function generateAllRecommendations() {
+    window.agroApp.showLoading('Gerando recomendações...');
+    
+    fetch('/api/recomendacoes/gerar', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            window.agroApp.hideLoading();
+            window.agroApp.showToast(data.message, 'success');
+            loadRecentRecommendations();
+            loadDashboardData();
+        })
+        .catch(error => {
+            window.agroApp.hideLoading();
+            window.agroApp.showToast('Erro ao gerar recomendações', 'error');
+        });
+}
+
+// Função global para marcar recomendação como aplicada
+window.markRecommendationApplied = function(recomendacaoId, observacoes = '') {
+    fetch(`/api/recomendacoes/${recomendacaoId}/aplicada`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ observacoes })
+    })
+    .then(response => response.json())
+    .then(data => {
+        window.agroApp.showToast(data.message, 'success');
+        loadRecentRecommendations();
+        loadDashboardData();
+    })
+    .catch(error => {
+        window.agroApp.showToast('Erro ao marcar recomendação como aplicada', 'error');
+    });
+};
+
+function getPriorityClass(priority) {
+    const classes = {
+        'baixa': 'success',
+        'media': 'warning',
+        'alta': 'danger',
+        'urgente': 'danger'
+    };
+    return classes[priority] || 'secondary';
+}
+
+function formatDate(dateString) {
+    return new Date(dateString).toLocaleDateString('pt-BR');
+}
+</script>

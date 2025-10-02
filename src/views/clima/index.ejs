@@ -1,0 +1,498 @@
+<div class="page-header">
+    <h1 class="page-title">Dados Climáticos</h1>
+    <p class="breadcrumb">Monitore as condições climáticas</p>
+</div>
+
+<div class="grid grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h3>Selecionar Plantação</h3>
+        </div>
+        <div class="card-body">
+            <select id="plantacaoSelect" class="form-select">
+                <option value="">Carregando plantações...</option>
+            </select>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h3>Período de Análise</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="periodo" class="form-label">Período</label>
+                    <select id="periodo" class="form-select">
+                        <option value="7">Últimos 7 dias</option>
+                        <option value="15">Últimos 15 dias</option>
+                        <option value="30" selected>Últimos 30 dias</option>
+                        <option value="60">Últimos 60 dias</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="climaContent" style="display: none;">
+    <div class="grid grid-2">
+        <!-- Resumo Atual -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Condições Atuais</h3>
+                <button onclick="updateClimateData()" class="btn btn-primary btn-sm">
+                    🔄 Atualizar
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="resumoAtual">
+                    <div class="loading">Carregando dados...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Estatísticas -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Estatísticas do Período</h3>
+            </div>
+            <div class="card-body">
+                <div id="estatisticas">
+                    <div class="loading">Carregando estatísticas...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Gráficos -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Gráficos Climáticos</h3>
+        </div>
+        <div class="card-body">
+            <div class="chart-tabs">
+                <button class="chart-tab active" onclick="showChart('temperatura')">Temperatura</button>
+                <button class="chart-tab" onclick="showChart('umidade')">Umidade</button>
+                <button class="chart-tab" onclick="showChart('precipitacao')">Precipitação</button>
+                <button class="chart-tab" onclick="showChart('vento')">Vento</button>
+            </div>
+            
+            <div class="chart-container" style="height: 400px; margin-top: 1rem;">
+                <canvas id="climaChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="noPlantacao" class="text-center" style="margin-top: 2rem;">
+    <p class="text-muted">Selecione uma plantação para visualizar os dados climáticos.</p>
+    <a href="/plantacao/nova" class="btn btn-primary">Cadastrar Nova Plantação</a>
+</div>
+
+<script>
+let currentChart = null;
+let climateData = null;
+let currentChartType = 'temperatura';
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadPlantacoes();
+    
+    document.getElementById('plantacaoSelect').addEventListener('change', function() {
+        if (this.value) {
+            loadClimateData(this.value);
+        } else {
+            hideClimateData();
+        }
+    });
+    
+    document.getElementById('periodo').addEventListener('change', function() {
+        const plantacaoId = document.getElementById('plantacaoSelect').value;
+        if (plantacaoId) {
+            loadClimateData(plantacaoId);
+        }
+    });
+});
+
+async function loadPlantacoes() {
+    try {
+        const response = await fetch('/api/plantacoes');
+        const plantacoes = await response.json();
+        
+        const select = document.getElementById('plantacaoSelect');
+        
+        if (plantacoes.length === 0) {
+            select.innerHTML = '<option value="">Nenhuma plantação cadastrada</option>';
+            return;
+        }
+        
+        select.innerHTML = '<option value="">Selecione uma plantação...</option>' +
+            plantacoes.map(p => `<option value="${p._id}">${p.nome}</option>`).join('');
+            
+        // Auto-selecionar se houver parâmetro na URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const plantacaoParam = urlParams.get('plantacao');
+        if (plantacaoParam) {
+            select.value = plantacaoParam;
+            loadClimateData(plantacaoParam);
+        }
+        
+    } catch (error) {
+        console.error('Erro ao carregar plantações:', error);
+    }
+}
+
+async function loadClimateData(plantacaoId) {
+    try {
+        window.agroApp.showLoading('Carregando dados climáticos...');
+        
+        // Carregar dados para gráficos
+        const climaResponse = await fetch(`/api/clima/${plantacaoId}`);
+        if (!climaResponse.ok) {
+            throw new Error(`Erro HTTP: ${climaResponse.status}`);
+        }
+        climateData = await climaResponse.json();
+        
+        // Carregar resumo
+        const resumoResponse = await fetch(`/api/clima/resumo/${plantacaoId}`);
+        if (!resumoResponse.ok) {
+            throw new Error(`Erro HTTP: ${resumoResponse.status}`);
+        }
+        const resumo = await resumoResponse.json();
+        
+        showClimateData();
+        updateResumo(resumo);
+        updateEstatisticas(climateData);
+        showChart(currentChartType);
+        
+        window.agroApp.hideLoading();
+        
+    } catch (error) {
+        window.agroApp.hideLoading();
+        console.error('Erro detalhado:', error);
+        
+        // Verificar se agroApp está disponível
+        if (window.agroApp && window.agroApp.showToast) {
+            window.agroApp.showToast('Erro ao carregar dados climáticos: ' + error.message, 'error');
+        } else {
+            alert('Erro ao carregar dados climáticos: ' + error.message);
+        }
+        
+        // Mostrar dados de erro na interface
+        showClimateData();
+        document.getElementById('resumoAtual').innerHTML = 
+            '<div class="text-danger">Erro ao carregar dados climáticos</div>';
+        document.getElementById('estatisticas').innerHTML = 
+            '<div class="text-danger">Dados não disponíveis</div>';
+    }
+}
+
+function showClimateData() {
+    document.getElementById('climaContent').style.display = 'block';
+    document.getElementById('noPlantacao').style.display = 'none';
+}
+
+function hideClimateData() {
+    document.getElementById('climaContent').style.display = 'none';
+    document.getElementById('noPlantacao').style.display = 'block';
+    if (currentChart) {
+        currentChart.destroy();
+        currentChart = null;
+    }
+}
+
+function updateResumo(resumo) {
+    const container = document.getElementById('resumoAtual');
+    
+    if (!resumo.dados) {
+        container.innerHTML = '<div class="text-muted">Nenhum dado disponível</div>';
+        return;
+    }
+    
+    const html = `
+        <div class="grid grid-3">
+            <div class="text-center">
+                <div style="font-size: 2rem; color: #ff6b35;">
+                    ${resumo.temperatura.media ? resumo.temperatura.media.toFixed(1) : '-'}°C
+                </div>
+                <div class="text-muted">Temperatura Média</div>
+            </div>
+            <div class="text-center">
+                <div style="font-size: 2rem; color: #17a2b8;">
+                    ${resumo.precipitacao.total.toFixed(1)}mm
+                </div>
+                <div class="text-muted">Precipitação Total</div>
+            </div>
+            <div class="text-center">
+                <div style="font-size: 2rem; color: #28a745;">
+                    ${resumo.umidade.media ? resumo.umidade.media.toFixed(0) : '-'}%
+                </div>
+                <div class="text-muted">Umidade Média</div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+function updateEstatisticas(data) {
+    const container = document.getElementById('estatisticas');
+    
+    if (!data.datasets || !data.labels || data.labels.length === 0) {
+        container.innerHTML = '<div class="text-muted">Nenhuma estatística disponível</div>';
+        return;
+    }
+    
+    try {
+        const tempMax = data.datasets.temperatura.maxima.length > 0 ? 
+            Math.max(...data.datasets.temperatura.maxima.filter(t => t > 0)) : 0;
+        const tempMin = data.datasets.temperatura.minima.length > 0 ? 
+            Math.min(...data.datasets.temperatura.minima.filter(t => t > 0)) : 0;
+        const precipTotal = data.datasets.precipitacao.reduce((a, b) => a + b, 0);
+        const umidadeMedia = data.datasets.umidade.length > 0 ? 
+            data.datasets.umidade.filter(u => u > 0).reduce((a, b) => a + b, 0) / data.datasets.umidade.filter(u => u > 0).length : 0;
+        
+        const html = `
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <strong>Temp. Máxima:</strong> ${tempMax > 0 ? tempMax.toFixed(1) + '°C' : 'N/A'}
+                </div>
+                <div class="stat-item">
+                    <strong>Temp. Mínima:</strong> ${tempMin > 0 ? tempMin.toFixed(1) + '°C' : 'N/A'}
+                </div>
+                <div class="stat-item">
+                    <strong>Chuva Total:</strong> ${precipTotal.toFixed(1)}mm
+                </div>
+                <div class="stat-item">
+                    <strong>Umidade Média:</strong> ${umidadeMedia > 0 ? umidadeMedia.toFixed(0) + '%' : 'N/A'}
+                </div>
+                <div class="stat-item">
+                    <strong>Dias com dados:</strong> ${data.labels.length}
+                </div>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Erro ao calcular estatísticas:', error);
+        container.innerHTML = '<div class="text-danger">Erro ao calcular estatísticas</div>';
+    }
+}
+
+function showChart(type) {
+    currentChartType = type;
+    
+    // Verificar se Chart.js está carregado
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js não foi carregado');
+        window.agroApp.showToast('Erro: biblioteca de gráficos não carregada', 'error');
+        return;
+    }
+    
+    // Atualizar tabs
+    document.querySelectorAll('.chart-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.textContent.toLowerCase().includes(type.toLowerCase())) {
+            tab.classList.add('active');
+        }
+    });
+    
+    if (!climateData || !climateData.datasets) {
+        console.warn('Dados climáticos não disponíveis para gráfico');
+        return;
+    }
+    
+    if (currentChart) {
+        currentChart.destroy();
+    }
+    
+    const ctx = document.getElementById('climaChart').getContext('2d');
+    
+    let datasets, options;
+    
+    switch (type) {
+        case 'temperatura':
+            datasets = [
+                {
+                    label: 'Máxima',
+                    data: climateData.datasets.temperatura.maxima,
+                    borderColor: '#ff6b35',
+                    backgroundColor: 'rgba(255, 107, 53, 0.1)',
+                    fill: false
+                },
+                {
+                    label: 'Média',
+                    data: climateData.datasets.temperatura.media,
+                    borderColor: '#ffa726',
+                    backgroundColor: 'rgba(255, 167, 38, 0.1)',
+                    fill: false
+                },
+                {
+                    label: 'Mínima',
+                    data: climateData.datasets.temperatura.minima,
+                    borderColor: '#42a5f5',
+                    backgroundColor: 'rgba(66, 165, 245, 0.1)',
+                    fill: false
+                }
+            ];
+            options = {
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Temperatura (°C)' }
+                    }
+                }
+            };
+            break;
+            
+        case 'umidade':
+            datasets = [{
+                label: 'Umidade',
+                data: climateData.datasets.umidade,
+                borderColor: '#26a69a',
+                backgroundColor: 'rgba(38, 166, 154, 0.1)',
+                fill: true
+            }];
+            options = {
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Umidade (%)' },
+                        min: 0,
+                        max: 100
+                    }
+                }
+            };
+            break;
+            
+        case 'precipitacao':
+            datasets = [{
+                label: 'Precipitação',
+                data: climateData.datasets.precipitacao,
+                backgroundColor: '#42a5f5',
+                borderColor: '#1976d2'
+            }];
+            options = {
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Precipitação (mm)' },
+                        beginAtZero: true
+                    }
+                }
+            };
+            break;
+            
+        case 'vento':
+            datasets = [{
+                label: 'Velocidade do Vento',
+                data: climateData.datasets.vento,
+                borderColor: '#ab47bc',
+                backgroundColor: 'rgba(171, 71, 188, 0.1)',
+                fill: true
+            }];
+            options = {
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Velocidade (m/s)' },
+                        beginAtZero: true
+                    }
+                }
+            };
+            break;
+    }
+    
+    currentChart = new Chart(ctx, {
+        type: type === 'precipitacao' ? 'bar' : 'line',
+        data: {
+            labels: climateData.labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: `${type.charAt(0).toUpperCase() + type.slice(1)} - ${document.getElementById('periodo').options[document.getElementById('periodo').selectedIndex].text}`
+                },
+                legend: {
+                    position: 'top'
+                }
+            },
+            scales: options.scales || {}
+        }
+    });
+}
+
+function updateClimateData() {
+    const plantacaoId = document.getElementById('plantacaoSelect').value;
+    
+    if (!plantacaoId) {
+        if (window.agroApp && window.agroApp.showToast) {
+            window.agroApp.showToast('Selecione uma plantação primeiro', 'warning');
+        } else {
+            alert('Selecione uma plantação primeiro');
+        }
+        return;
+    }
+    
+    if (window.agroApp && window.agroApp.updateClimateData) {
+        window.agroApp.updateClimateData().then(() => {
+            // Recarregar dados após atualização
+            loadClimateData(plantacaoId);
+        }).catch(error => {
+            console.error('Erro na atualização:', error);
+        });
+    } else {
+        // Fallback direto para a API
+        fetch('/api/clima/atualizar', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                loadClimateData(plantacaoId);
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao atualizar dados climáticos');
+            });
+    }
+}
+</script>
+
+<style>
+.chart-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.chart-tab {
+    padding: 0.5rem 1rem;
+    border: 1px solid #dee2e6;
+    background: #f8f9fa;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    transition: all 0.2s;
+}
+
+.chart-tab:hover {
+    background: #e9ecef;
+}
+
+.chart-tab.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.stat-item {
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 0.25rem;
+    text-align: center;
+}
+</style>

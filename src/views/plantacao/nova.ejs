@@ -1,0 +1,503 @@
+<div class="page-header">
+    <h1 class="page-title">Nova Plantação</h1>
+    <p class="breadcrumb">Cadastre uma nova plantação</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Informações da Plantação</h3>
+    </div>
+    <div class="card-body">
+        <form id="novaPlantacaoForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="nome" class="form-label">Nome da Plantação</label>
+                    <input type="text" id="nome" name="nome" class="form-input" required 
+                           placeholder="Ex: Café Fazenda Sul">
+                </div>
+                
+                <div class="form-group">
+                    <label for="especie" class="form-label">Espécie</label>
+                    <select id="especie" name="especie" class="form-select" required>
+                        <option value="">Selecione a espécie</option>
+                        <option value="cafe">Café</option>
+                        <option value="milho">Milho</option>
+                        <option value="soja">Soja</option>
+                        <option value="cana">Cana-de-açúcar</option>
+                        <option value="feijao">Feijão</option>
+                        <option value="algodao">Algodão</option>
+                        <option value="trigo">Trigo</option>
+                        <option value="arroz">Arroz</option>
+                        <option value="outro">Outro</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="variedade" class="form-label">Variedade</label>
+                    <input type="text" id="variedade" name="variedade" class="form-input" 
+                           placeholder="Ex: Arábica, Bourbon, etc.">
+                </div>
+                
+                <div class="form-group">
+                    <label for="area" class="form-label">Área (hectares)</label>
+                    <input type="number" id="area" name="area" class="form-input" min="0" step="0.1" required 
+                           placeholder="Ex: 10.5">
+                </div>
+            </div>
+            
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="latitude" class="form-label">Latitude</label>
+                        <input type="number" id="latitude" name="latitude" class="form-input" 
+                               step="0.000001" min="-90" max="90" required
+                               placeholder="Ex: -23.5505">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="longitude" class="form-label">Longitude</label>
+                        <input type="number" id="longitude" name="longitude" class="form-input" 
+                               step="0.000001" min="-180" max="180" required
+                               placeholder="Ex: -46.6333">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="location-buttons">
+                        <button type="button" onclick="buscarEnderecoPorCoordenadas()" class="btn btn-info btn-sm">
+                            🔍 Buscar Cidade/Estado
+                        </button>
+                    </div>
+                    <small class="text-muted" style="display: block; margin-top: 0.5rem;">
+                        <strong>📍 Usar Minha Localização:</strong> Obtém automaticamente suas coordenadas, cidade e estado<br>
+                        <strong>🔍 Buscar Cidade/Estado:</strong> Digite as coordenadas manualmente e busque a localização
+                    </small>
+                </div>            <div class="form-row">
+                <div class="form-group">
+                    <label for="cidade" class="form-label">Cidade</label>
+                    <input type="text" id="cidade" name="cidade" class="form-input" required 
+                           placeholder="Ex: São Paulo">
+                </div>
+                
+                <div class="form-group">
+                    <label for="estado" class="form-label">Estado</label>
+                    <select id="estado" name="estado" class="form-select" required>
+                        <option value="">Selecione o estado</option>
+                        <option value="AC">Acre</option>
+                        <option value="AL">Alagoas</option>
+                        <option value="AP">Amapá</option>
+                        <option value="AM">Amazonas</option>
+                        <option value="BA">Bahia</option>
+                        <option value="CE">Ceará</option>
+                        <option value="DF">Distrito Federal</option>
+                        <option value="ES">Espírito Santo</option>
+                        <option value="GO">Goiás</option>
+                        <option value="MA">Maranhão</option>
+                        <option value="MT">Mato Grosso</option>
+                        <option value="MS">Mato Grosso do Sul</option>
+                        <option value="MG">Minas Gerais</option>
+                        <option value="PA">Pará</option>
+                        <option value="PB">Paraíba</option>
+                        <option value="PR">Paraná</option>
+                        <option value="PE">Pernambuco</option>
+                        <option value="PI">Piauí</option>
+                        <option value="RJ">Rio de Janeiro</option>
+                        <option value="RN">Rio Grande do Norte</option>
+                        <option value="RS">Rio Grande do Sul</option>
+                        <option value="RO">Rondônia</option>
+                        <option value="RR">Roraima</option>
+                        <option value="SC">Santa Catarina</option>
+                        <option value="SP">São Paulo</option>
+                        <option value="SE">Sergipe</option>
+                        <option value="TO">Tocantins</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="observacoes" class="form-label">Observações (opcional)</label>
+                <textarea id="observacoes" name="observacoes" class="form-input" rows="3" 
+                          placeholder="Informações adicionais sobre a plantação..."></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" onclick="history.back()" class="btn btn-secondary">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Cadastrar Plantação</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.getElementById('novaPlantacaoForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = Object.fromEntries(formData.entries());
+    
+    // Converter números
+    data.area = parseFloat(data.area);
+    data.latitude = parseFloat(data.latitude);
+    data.longitude = parseFloat(data.longitude);
+    
+    try {
+        window.agroApp.showLoading('Cadastrando plantação...');
+        
+        const response = await fetch('/api/plantacoes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        window.agroApp.hideLoading();
+        
+        if (response.ok) {
+            window.agroApp.showToast('Plantação cadastrada com sucesso!', 'success');
+            setTimeout(() => {
+                window.location.href = '/plantacao';
+            }, 1500);
+        } else {
+            window.agroApp.showToast(result.error || 'Erro ao cadastrar plantação', 'error');
+        }
+        
+    } catch (error) {
+        window.agroApp.hideLoading();
+        window.agroApp.showToast('Erro ao cadastrar plantação', 'error');
+        console.error('Erro:', error);
+    }
+});
+
+// Buscar localização automaticamente se o navegador suportar
+if (navigator.geolocation) {
+    const getLocationBtn = document.createElement('button');
+    getLocationBtn.type = 'button';
+    getLocationBtn.className = 'btn btn-outline btn-sm';
+    getLocationBtn.textContent = '📍 Usar Minha Localização';
+    
+    getLocationBtn.addEventListener('click', function() {
+        window.agroApp.showLoading('Obtendo localização...');
+        
+        navigator.geolocation.getCurrentPosition(
+            async function(position) {
+                try {
+                    // Preencher coordenadas
+                    document.getElementById('latitude').value = position.coords.latitude.toFixed(6);
+                    document.getElementById('longitude').value = position.coords.longitude.toFixed(6);
+                    
+                    // Buscar informações de cidade e estado usando geocodificação reversa
+                    await buscarCidadeEstado(position.coords.latitude, position.coords.longitude);
+                    
+                    window.agroApp.hideLoading();
+                    window.agroApp.showToast('Localização e endereço obtidos com sucesso!', 'success');
+                } catch (error) {
+                    window.agroApp.hideLoading();
+                    window.agroApp.showToast('Localização obtida, mas não foi possível determinar cidade/estado', 'warning');
+                    console.error('Erro ao buscar endereço:', error);
+                }
+            },
+            function(error) {
+                window.agroApp.hideLoading();
+                let errorMessage = 'Erro ao obter localização';
+                
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        errorMessage = 'Permissão de localização negada. Verifique as configurações do navegador.';
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        errorMessage = 'Informações de localização não disponíveis.';
+                        break;
+                    case error.TIMEOUT:
+                        errorMessage = 'Timeout ao obter localização.';
+                        break;
+                }
+                
+                window.agroApp.showToast(errorMessage, 'error');
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 300000 // 5 minutos
+            }
+        );
+    });
+    
+    // Adicionar o botão ao container de botões de localização
+    const locationButtonsContainer = document.querySelector('.location-buttons');
+    if (locationButtonsContainer) {
+        locationButtonsContainer.appendChild(getLocationBtn);
+    }
+}
+
+// Função para buscar cidade e estado usando geocodificação reversa
+async function buscarCidadeEstado(latitude, longitude) {
+    try {
+        // Usando a API do OpenStreetMap Nominatim (gratuita)
+        const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&accept-language=pt-BR,pt,en`
+        );
+        
+        if (!response.ok) {
+            throw new Error('Erro na API de geocodificação');
+        }
+        
+        const data = await response.json();
+        
+        if (data && data.address) {
+            const address = data.address;
+            
+            // Extrair cidade (pode vir como city, town, village, municipality, etc.)
+            const cidade = address.city || 
+                          address.town || 
+                          address.village || 
+                          address.municipality || 
+                          address.county ||
+                          address.suburb ||
+                          '';
+            
+            // Extrair estado (pode vir como state ou state_district)
+            const estado = address.state || address.state_district || '';
+            
+            // Preencher campos se encontrou informações
+            if (cidade) {
+                document.getElementById('cidade').value = cidade;
+            }
+            
+            if (estado) {
+                // Tentar mapear nome do estado para sigla
+                const estadoSigla = mapearEstadoParaSigla(estado);
+                if (estadoSigla) {
+                    document.getElementById('estado').value = estadoSigla;
+                }
+            }
+            
+            console.log('Endereço encontrado:', {
+                cidade: cidade,
+                estado: estado,
+                enderecoCompleto: data.display_name
+            });
+            
+        } else {
+            throw new Error('Endereço não encontrado para estas coordenadas');
+        }
+        
+    } catch (error) {
+        console.error('Erro ao buscar endereço:', error);
+        
+        // Tentar API alternativa (ViaCEP com coordenadas aproximadas)
+        try {
+            await buscarCidadeEstadoAlternativo(latitude, longitude);
+        } catch (alternativeError) {
+            console.error('Erro na API alternativa:', alternativeError);
+            throw new Error('Não foi possível determinar cidade e estado');
+        }
+    }
+}
+
+// API alternativa usando approximate location
+async function buscarCidadeEstadoAlternativo(latitude, longitude) {
+    // Para coordenadas no Brasil, podemos usar uma aproximação baseada em regiões conhecidas
+    const estadosPorRegiao = inferirEstadoPorCoordenadas(latitude, longitude);
+    
+    if (estadosPorRegiao) {
+        document.getElementById('estado').value = estadosPorRegiao.sigla;
+        if (estadosPorRegiao.cidadePrincipal) {
+            document.getElementById('cidade').value = estadosPorRegiao.cidadePrincipal;
+        }
+    }
+}
+
+// Função para mapear nome do estado para sigla
+function mapearEstadoParaSigla(nomeEstado) {
+    const mapeamento = {
+        'acre': 'AC',
+        'alagoas': 'AL',
+        'amapá': 'AP', 'amapa': 'AP',
+        'amazonas': 'AM',
+        'bahia': 'BA',
+        'ceará': 'CE', 'ceara': 'CE',
+        'distrito federal': 'DF',
+        'espírito santo': 'ES', 'espirito santo': 'ES',
+        'goiás': 'GO', 'goias': 'GO',
+        'maranhão': 'MA', 'maranhao': 'MA',
+        'mato grosso': 'MT',
+        'mato grosso do sul': 'MS',
+        'minas gerais': 'MG',
+        'pará': 'PA', 'para': 'PA',
+        'paraíba': 'PB', 'paraiba': 'PB',
+        'paraná': 'PR', 'parana': 'PR',
+        'pernambuco': 'PE',
+        'piauí': 'PI', 'piaui': 'PI',
+        'rio de janeiro': 'RJ',
+        'rio grande do norte': 'RN',
+        'rio grande do sul': 'RS',
+        'rondônia': 'RO', 'rondonia': 'RO',
+        'roraima': 'RR',
+        'santa catarina': 'SC',
+        'são paulo': 'SP', 'sao paulo': 'SP',
+        'sergipe': 'SE',
+        'tocantins': 'TO'
+    };
+    
+    const nomeNormalizado = nomeEstado.toLowerCase().trim();
+    return mapeamento[nomeNormalizado] || null;
+}
+
+// Função para inferir estado baseado em coordenadas (aproximação para o Brasil)
+function inferirEstadoPorCoordenadas(lat, lng) {
+    // Coordenadas aproximadas das regiões brasileiras
+    const regioes = [
+        { sigla: 'AC', nome: 'Acre', lat: [-11, -7], lng: [-74, -66], cidadePrincipal: 'Rio Branco' },
+        { sigla: 'AL', nome: 'Alagoas', lat: [-10.5, -8.8], lng: [-38, -35], cidadePrincipal: 'Maceió' },
+        { sigla: 'AP', nome: 'Amapá', lat: [4, 1], lng: [-55, -49], cidadePrincipal: 'Macapá' },
+        { sigla: 'AM', nome: 'Amazonas', lat: [-2, 2], lng: [-74, -56], cidadePrincipal: 'Manaus' },
+        { sigla: 'BA', nome: 'Bahia', lat: [-18.5, -8.5], lng: [-47, -37], cidadePrincipal: 'Salvador' },
+        { sigla: 'CE', nome: 'Ceará', lat: [-8, -2.5], lng: [-41.5, -37], cidadePrincipal: 'Fortaleza' },
+        { sigla: 'DF', nome: 'Distrito Federal', lat: [-16.1, -15.4], lng: [-48.3, -47.2], cidadePrincipal: 'Brasília' },
+        { sigla: 'ES', nome: 'Espírito Santo', lat: [-21.5, -17.8], lng: [-42, -39.5], cidadePrincipal: 'Vitória' },
+        { sigla: 'GO', nome: 'Goiás', lat: [-19.5, -12.3], lng: [-53, -45.9], cidadePrincipal: 'Goiânia' },
+        { sigla: 'MA', nome: 'Maranhão', lat: [-10.5, -1.5], lng: [-48.5, -41.5], cidadePrincipal: 'São Luís' },
+        { sigla: 'MT', nome: 'Mato Grosso', lat: [-18, -7], lng: [-66, -50], cidadePrincipal: 'Cuiabá' },
+        { sigla: 'MS', nome: 'Mato Grosso do Sul', lat: [-24.5, -17.5], lng: [-58, -50.5], cidadePrincipal: 'Campo Grande' },
+        { sigla: 'MG', nome: 'Minas Gerais', lat: [-22.9, -14.2], lng: [-51, -39.8], cidadePrincipal: 'Belo Horizonte' },
+        { sigla: 'PA', nome: 'Pará', lat: [-10, 2.5], lng: [-59, -46], cidadePrincipal: 'Belém' },
+        { sigla: 'PB', nome: 'Paraíba', lat: [-8.3, -6], lng: [-39, -34.7], cidadePrincipal: 'João Pessoa' },
+        { sigla: 'PR', nome: 'Paraná', lat: [-26.8, -22.5], lng: [-55, -48], cidadePrincipal: 'Curitiba' },
+        { sigla: 'PE', nome: 'Pernambuco', lat: [-9.5, -7.1], lng: [-41.5, -34.8], cidadePrincipal: 'Recife' },
+        { sigla: 'PI', nome: 'Piauí', lat: [-10.9, -2.7], lng: [-46, -40.3], cidadePrincipal: 'Teresina' },
+        { sigla: 'RJ', nome: 'Rio de Janeiro', lat: [-23.4, -20.7], lng: [-45, -40.9], cidadePrincipal: 'Rio de Janeiro' },
+        { sigla: 'RN', nome: 'Rio Grande do Norte', lat: [-6.9, -4.8], lng: [-38.6, -34.9], cidadePrincipal: 'Natal' },
+        { sigla: 'RS', nome: 'Rio Grande do Sul', lat: [-33.8, -27], lng: [-58, -49.6], cidadePrincipal: 'Porto Alegre' },
+        { sigla: 'RO', nome: 'Rondônia', lat: [-13.7, -7.9], lng: [-66, -60], cidadePrincipal: 'Porto Velho' },
+        { sigla: 'RR', nome: 'Roraima', lat: [5.3, -0.02], lng: [-64.8, -58.9], cidadePrincipal: 'Boa Vista' },
+        { sigla: 'SC', nome: 'Santa Catarina', lat: [-29.4, -25.9], lng: [-53.8, -48.3], cidadePrincipal: 'Florianópolis' },
+        { sigla: 'SP', nome: 'São Paulo', lat: [-25.3, -19.8], lng: [-53.1, -44.2], cidadePrincipal: 'São Paulo' },
+        { sigla: 'SE', nome: 'Sergipe', lat: [-11.6, -9.5], lng: [-38.6, -36.4], cidadePrincipal: 'Aracaju' },
+        { sigla: 'TO', nome: 'Tocantins', lat: [-13.5, -4.9], lng: [-50.7, -45.7], cidadePrincipal: 'Palmas' }
+    ];
+    
+    for (const regiao of regioes) {
+        if (lat >= regiao.lat[0] && lat <= regiao.lat[1] && 
+            lng >= regiao.lng[0] && lng <= regiao.lng[1]) {
+            return regiao;
+        }
+    }
+    
+    return null;
+}
+
+// Função para buscar endereço usando coordenadas inseridas manualmente
+async function buscarEnderecoPorCoordenadas() {
+    const latitude = document.getElementById('latitude').value;
+    const longitude = document.getElementById('longitude').value;
+    
+    if (!latitude || !longitude) {
+        if (window.agroApp && window.agroApp.showToast) {
+            window.agroApp.showToast('Digite a latitude e longitude primeiro', 'warning');
+        } else {
+            alert('Digite a latitude e longitude primeiro');
+        }
+        return;
+    }
+    
+    // Validar se as coordenadas estão em formato válido
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        if (window.agroApp && window.agroApp.showToast) {
+            window.agroApp.showToast('Coordenadas inválidas. Verifique os valores inseridos.', 'error');
+        } else {
+            alert('Coordenadas inválidas. Verifique os valores inseridos.');
+        }
+        return;
+    }
+    
+    try {
+        if (window.agroApp && window.agroApp.showLoading) {
+            window.agroApp.showLoading('Buscando endereço...');
+        }
+        
+        await buscarCidadeEstado(lat, lng);
+        
+        if (window.agroApp && window.agroApp.hideLoading) {
+            window.agroApp.hideLoading();
+        }
+        
+        if (window.agroApp && window.agroApp.showToast) {
+            window.agroApp.showToast('Endereço encontrado e preenchido!', 'success');
+        } else {
+            alert('Endereço encontrado e preenchido!');
+        }
+        
+    } catch (error) {
+        if (window.agroApp && window.agroApp.hideLoading) {
+            window.agroApp.hideLoading();
+        }
+        
+        console.error('Erro ao buscar endereço:', error);
+        
+        if (window.agroApp && window.agroApp.showToast) {
+            window.agroApp.showToast('Não foi possível encontrar o endereço para essas coordenadas', 'error');
+        } else {
+            alert('Não foi possível encontrar o endereço para essas coordenadas');
+        }
+    }
+}
+</script>
+
+<style>
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+    transition: all 0.2s;
+}
+
+.btn-outline:hover {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-info {
+    background: #17a2b8;
+    border-color: #17a2b8;
+    color: white;
+}
+
+.btn-info:hover {
+    background: #138496;
+    border-color: #117a8b;
+}
+
+.form-group .text-muted {
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.location-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+
+.location-buttons .btn {
+    flex: 1;
+    min-width: 200px;
+}
+
+@media (max-width: 768px) {
+    .location-buttons {
+        flex-direction: column;
+    }
+    
+    .location-buttons .btn {
+        width: 100%;
+    }
+}
+</style>
