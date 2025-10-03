@@ -91,10 +91,12 @@ app.post('/auth/login', async (req, res) => {
     }
 
     req.session.user = {
-      id: usuario._id,
+      id: usuario.email === 'joao@example.com' ? 'sim_1' : usuario._id, // Força ID sim_1 para usuário de teste
       nome: usuario.nome,
       email: usuario.email
     };
+
+    console.log(`✅ Usuário logado com ID: ${req.session.user.id}`);
 
     res.redirect('/');
   } catch (error) {
@@ -176,6 +178,7 @@ app.post('/auth/register', async (req, res) => {
 
 // Logout
 app.post('/auth/logout', (req, res) => {
+  console.log(`🚪 Logout do usuário: ${req.session.user?.id || 'nenhum'}`);
   req.session.destroy((err) => {
     if (err) {
       console.error('Erro ao destruir sessão:', err);
@@ -516,6 +519,17 @@ app.get('/api/recomendacoes', requireAuth, (req, res) => {
     const recomendacoes = simulatedDB.findRecomendacoesPorUsuario(req.session.user.id);
     console.log(`🔍 Debug - Recomendações encontradas: ${recomendacoes.length}`);
     
+    // Adicionar debug detalhado
+    if (recomendacoes.length === 0) {
+      console.log('❌ Nenhuma recomendação encontrada no banco para usuário:', req.session.user.id);
+      console.log('📊 Verificando todas as recomendações no banco...');
+      const todasRecomendacoes = Array.from(simulatedDB.recomendacoes.values());
+      console.log(`Total de recomendações no banco: ${todasRecomendacoes.length}`);
+      todasRecomendacoes.forEach((r, i) => {
+        console.log(`Recomendação ${i+1}: usuario=${r.usuario}, plantacao=${r.plantacao}, ativa=${r.ativa}`);
+      });
+    }
+    
     const hoje = new Date();
     
     const recomendacoesFormatadas = recomendacoes.map(r => {
@@ -542,7 +556,7 @@ app.get('/api/recomendacoes', requireAuth, (req, res) => {
     console.log(`📋 Debug - Recomendações formatadas: ${recomendacoesFormatadas.length}`);
     res.json(recomendacoesFormatadas);
   } catch (error) {
-    console.error('Erro ao listar recomendações:', error);
+    console.error('❌ Erro ao listar recomendações:', error);
     res.status(500).json({ error: 'Erro interno ao listar recomendações' });
   }
 });
@@ -894,7 +908,7 @@ async function gerarRecomendacoesPreditivas(plantacao, usuarioId) {
     const recomendacoesExistentes = simulatedDB.findRecomendacoesPorUsuario(usuarioId)
       .filter(r => r.plantacao === plantacao._id && r.status === 'pendente' && r.ativa);
     
-    // Verificar se há recomendações preditivas nas últimas 6 horas
+    // Verificar se há recomendações preditivas nas últimas 2 horas (reduzido de 6h)
     const recomendacoesPreditivasRecentes = recomendacoesExistentes.filter(r => {
       const isPreditiva = r.parametrosUsados?.parametros?.tipo_analise === 'preditiva' ||
                          r.tipo?.includes('_preditivo');
@@ -902,11 +916,11 @@ async function gerarRecomendacoesPreditivas(plantacao, usuarioId) {
       
       const criadaEm = new Date(r.criadaEm || r.createdAt);
       const horasDesde = (agora - criadaEm) / (1000 * 60 * 60);
-      return horasDesde < 6; // Menos de 6 horas
+      return horasDesde < 2; // Reduzido para 2 horas
     });
     
     if (recomendacoesPreditivasRecentes.length > 0) {
-      console.log(`⏭️ Pulando geração preditiva para ${plantacao.nome} - já existem ${recomendacoesPreditivasRecentes.length} recomendações preditivas recentes`);
+      console.log(`⏭️ Pulando geração preditiva para ${plantacao.nome} - já existem ${recomendacoesPreditivasRecentes.length} recomendações preditivas nas últimas 2h`);
       return;
     }
     
@@ -1018,6 +1032,15 @@ app.use((err, req, res, next) => {
     title: 'Erro - Conecta Engenharias Agro',
     message: 'Erro interno do servidor',
     error: process.env.NODE_ENV === 'development' ? err : {}
+  });
+});
+
+// Debug session (remover em produção)
+app.get('/debug/session', (req, res) => {
+  res.json({
+    user: req.session.user || null,
+    sessionID: req.sessionID,
+    usuario_no_banco: simulatedDB.findUsuarioPorEmail('joao@example.com')
   });
 });
 

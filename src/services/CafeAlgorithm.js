@@ -395,7 +395,7 @@ class CafeAlgorithm {
 
     return {
       plantacao: plantacaoId,
-      usuario: usuarioId,
+      usuario_id: usuarioId,
       tipo: recomendacao.tipo,
       prioridade: recomendacao.prioridade,
       titulo: recomendacao.titulo,
@@ -425,24 +425,35 @@ class CafeAlgorithm {
    * @returns {Array} Recomendações preventivas
    */
   async analisarPrevisao(plantacao, previsao5Dias, variedade) {
-    const PrevisaoService = require('./PrevisaoService');
-    const alertasPreditivos = PrevisaoService.analisarRiscosFuturos(previsao5Dias, plantacao);
-    
-    // Converter alertas em recomendações com formatação do sistema
-    return alertasPreditivos.map(alerta => ({
-      tipo: `${alerta.tipo}_preditivo`,
-      prioridade: alerta.prioridade,
-      titulo: `🔮 ${alerta.titulo}`,
-      descricao: `PREVISÃO: ${alerta.descricao}`,
-      acaoRecomendada: alerta.acaoRecomendada,
-      fundamentacao: `Análise preditiva - ${alerta.tipo}`,
-      parametros: { 
-        ...alerta.parametros,
-        tipo_analise: 'preditiva',
-        data_evento: alerta.dataEvento,
-        variedade: plantacao.variedade_cafe
+    try {
+      const PrevisaoService = require('./PrevisaoService');
+      const alertasPreditivos = PrevisaoService.analisarRiscosFuturos(previsao5Dias, plantacao);
+      
+      // Verificar se alertasPreditivos é um array
+      if (!Array.isArray(alertasPreditivos)) {
+        console.warn('⚠️ analisarRiscosFuturos não retornou array:', alertasPreditivos);
+        return [];
       }
-    }));
+      
+      // Converter alertas em recomendações com formatação do sistema
+      return alertasPreditivos.map(alerta => ({
+        tipo: `${alerta.tipo}_preditivo`,
+        prioridade: alerta.prioridade,
+        titulo: `🔮 ${alerta.titulo}`,
+        descricao: `PREVISÃO: ${alerta.descricao}`,
+        acaoRecomendada: alerta.acaoRecomendada,
+        fundamentacao: `Análise preditiva - ${alerta.tipo}`,
+        parametros: { 
+          ...alerta.parametros,
+          tipo_analise: 'preditiva',
+          data_evento: alerta.dataEvento,
+          variedade: plantacao.variedade_cafe
+        }
+      }));
+    } catch (error) {
+      console.error('❌ Erro na análise preditiva:', error);
+      return []; // Retornar array vazio em caso de erro
+    }
   }
 }
 

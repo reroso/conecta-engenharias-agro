@@ -334,10 +334,36 @@ class AgroApp {
     const recomendacoesChart = document.getElementById('recomendacoesChart');
     
     if (recomendacoesChart) {
-      this.loadChartData('/recomendacao/dashboard', (data) => {
+      // Método mais robusto para limpar canvas
+      try {
+        // Destruir qualquer chart existente com esse ID
+        const existingChart = Chart.getChart(recomendacoesChart);
+        if (existingChart) {
+          existingChart.destroy();
+        }
+        
+        // Limpar contexto do canvas
+        const ctx = recomendacoesChart.getContext('2d');
+        ctx.clearRect(0, 0, recomendacoesChart.width, recomendacoesChart.height);
+        
+        // Destruir instância local se existir
+        if (this.chartInstances && this.chartInstances.recomendacoes) {
+          this.chartInstances.recomendacoes.destroy();
+          delete this.chartInstances.recomendacoes;
+        }
+      } catch (error) {
+        console.log('🧹 Limpeza de canvas:', error.message);
+      }
+      
+      this.loadChartData('/api/recomendacoes/dashboard', (data) => {
         const ctx = recomendacoesChart.getContext('2d');
         
-        new Chart(ctx, {
+        // Inicializar array de instâncias se não existir
+        if (!this.chartInstances) {
+          this.chartInstances = {};
+        }
+        
+        this.chartInstances.recomendacoes = new Chart(ctx, {
           type: 'doughnut',
           data: {
             labels: data.estatisticas.porStatus.map(s => this.statusLabel(s._id)),

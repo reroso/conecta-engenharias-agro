@@ -16,8 +16,13 @@ class SimulatedDatabase {
   }
 
   initializeData() {
-    // Usuário de exemplo
-    const usuarioId = this.generateId();
+    // IMPORTANTE: Resetar o contador de IDs para garantir consistência
+    this.nextId = 1;
+    
+    // Usuário de exemplo - sempre será sim_1
+    const usuarioId = this.generateId(); // Será sim_1
+    console.log(`🔧 Criando usuário de exemplo com ID: ${usuarioId}`);
+    
     this.usuarios.set(usuarioId, {
       _id: usuarioId,
       nome: 'João Silva',
@@ -221,7 +226,7 @@ class SimulatedDatabase {
     this.recomendacoes.set(rec1Id, {
       _id: rec1Id,
       plantacao: plantacaoIds[0],
-      usuario: usuarioId,
+      usuario_id: usuarioId,
       tipo: 'irrigacao',
       prioridade: 'alta',
       titulo: 'Irrigação Necessária',
@@ -241,7 +246,7 @@ class SimulatedDatabase {
     this.recomendacoes.set(rec2Id, {
       _id: rec2Id,
       plantacao: plantacaoIds[0],
-      usuario: usuarioId,
+      usuario_id: usuarioId,
       tipo: 'correcao_ph',
       prioridade: 'media',
       titulo: 'Correção de pH Necessária',
@@ -261,7 +266,7 @@ class SimulatedDatabase {
     this.recomendacoes.set(rec3Id, {
       _id: rec3Id,
       plantacao: plantacaoIds[1],
-      usuario: usuarioId,
+      usuario_id: usuarioId,
       tipo: 'alerta_climatico',
       prioridade: 'urgente',
       titulo: 'Alerta: Possível Estresse Hídrico',
@@ -279,11 +284,17 @@ class SimulatedDatabase {
 
   // Métodos para simular operações do MongoDB
   findUsuarioPorEmail(email) {
+    console.log(`🔍 Buscando usuário por email: ${email}`);
+    
     for (const usuario of this.usuarios.values()) {
       if (usuario.email === email) {
+        console.log(`✅ Usuário encontrado: ID=${usuario._id}, Nome=${usuario.nome}`);
         return usuario;
       }
     }
+    
+    console.log(`❌ Usuário não encontrado para email: ${email}`);
+    console.log(`📊 Usuários no banco:`, Array.from(this.usuarios.values()).map(u => ({ id: u._id, email: u.email })));
     return null;
   }
 
@@ -301,12 +312,23 @@ class SimulatedDatabase {
   }
 
   findRecomendacoesPorUsuario(usuarioId) {
+    console.log(`🔍 Buscando recomendações para usuário: ${usuarioId}`);
+    
     // Limpar recomendações muito antigas automaticamente
     this.limparRecomendacoesAntigas(usuarioId);
     
-    return Array.from(this.recomendacoes.values())
-      .filter(r => r.usuario === usuarioId && r.ativa)
+    const recomendacoes = Array.from(this.recomendacoes.values())
+      .filter(r => r.usuario_id === usuarioId && r.ativa)
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    console.log(`📊 Recomendações encontradas: ${recomendacoes.length}`);
+    console.log(`📋 Total de recomendações no banco: ${this.recomendacoes.size}`);
+    
+    // Debug: listar todas as recomendações
+    const todasRecomendacoes = Array.from(this.recomendacoes.values());
+    console.log(`🗂️ Usuários nas recomendações:`, todasRecomendacoes.map(r => ({ usuario_id: r.usuario_id, ativa: r.ativa })));
+    
+    return recomendacoes;
   }
 
   // Método para limpar recomendações antigas (mais de 30 dias)
@@ -316,7 +338,7 @@ class SimulatedDatabase {
     
     let removidas = 0;
     for (const [id, recomendacao] of this.recomendacoes.entries()) {
-      if (recomendacao.usuario === usuarioId && 
+      if (recomendacao.usuario_id === usuarioId && 
           recomendacao.createdAt && 
           new Date(recomendacao.createdAt) < limite) {
         this.recomendacoes.delete(id);
