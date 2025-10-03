@@ -160,8 +160,8 @@ class SimulatedDatabase {
     // Dados climáticos dos últimos 30 dias
     this.generateClimateData([plantacao1Id, plantacao2Id, plantacao3Id]);
 
-    // Não gerar recomendações padrão para evitar confusão
-    // As recomendações serão geradas apenas quando solicitadas
+    // Gerar recomendações de exemplo para demonstração
+    this.generateSampleRecommendations(usuarioId, [plantacao1Id, plantacao2Id, plantacao3Id]);
   }
 
   generateClimateData(plantacaoIds) {

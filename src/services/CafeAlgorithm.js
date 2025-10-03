@@ -400,6 +400,9 @@ class CafeAlgorithm {
         dataLimite: dataLimite
       },
       status: 'pendente',
+      ativa: true, // Campo necessário para busca
+      createdAt: agora, // Campo necessário para ordenação
+      criadaEm: agora, // Manter compatibilidade
       parametrosUsados: {
         algoritmo: 'deterministico_cafe_v1',
         fundamentacao: recomendacao.fundamentacao,

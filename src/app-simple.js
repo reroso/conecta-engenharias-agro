@@ -233,14 +233,19 @@ async function verificarEGerarRecomendacoesAutomaticas(usuarioId) {
       
       // Verificar última geração de recomendações
       const ultimaRecomendacao = recomendacoesExistentes
-        .sort((a, b) => new Date(b.criadaEm) - new Date(a.criadaEm))[0];
+        .sort((a, b) => {
+          const dateA = new Date(a.criadaEm || a.createdAt);
+          const dateB = new Date(b.criadaEm || b.createdAt);
+          return dateB - dateA;
+        })[0];
       
       let precisaGerar = false;
       
       if (!ultimaRecomendacao) {
         precisaGerar = true; // Nunca gerou recomendações
       } else {
-        const horasDesdeUltima = (agora - new Date(ultimaRecomendacao.criadaEm)) / (1000 * 60 * 60);
+        const dataUltimaRecomendacao = new Date(ultimaRecomendacao.criadaEm || ultimaRecomendacao.createdAt);
+        const horasDesdeUltima = (agora - dataUltimaRecomendacao) / (1000 * 60 * 60);
         precisaGerar = horasDesdeUltima > 24; // Gerar novas a cada 24 horas
       }
       
@@ -482,6 +487,8 @@ app.get('/api/clima/:plantacaoId', requireAuth, (req, res) => {
 app.get('/api/recomendacoes', requireAuth, (req, res) => {
   try {
     const recomendacoes = simulatedDB.findRecomendacoesPorUsuario(req.session.user.id);
+    console.log(`🔍 Debug - Recomendações encontradas: ${recomendacoes.length}`);
+    
     const hoje = new Date();
     
     const recomendacoesFormatadas = recomendacoes.map(r => {
@@ -500,11 +507,12 @@ app.get('/api/recomendacoes', requireAuth, (req, res) => {
         acaoRecomendada: r.acaoRecomendada,
         dataRecomendada: r.cronograma.dataRecomendada,
         dataLimite: r.cronograma.dataLimite,
-        criadaEm: r.criadaEm,
+        criadaEm: r.criadaEm || r.createdAt,
         diasRestantes: { dias: diasRestantes }
       };
     });
 
+    console.log(`📋 Debug - Recomendações formatadas: ${recomendacoesFormatadas.length}`);
     res.json(recomendacoesFormatadas);
   } catch (error) {
     console.error('Erro ao listar recomendações:', error);
