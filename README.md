@@ -228,18 +228,5 @@ Este projeto está sob a licença **ISC**.
 ## 👨‍💻 Autor
 
 **Felipe Soares**
-- GitHub: [@felipe-soares](https://github.com/felipe-soares)
+- GitHub: [@felipe-soares](https://github.com/reroso)
 - LinkedIn: [Felipe Soares](https://linkedin.com/in/felipe-soares)
-
-## 🙏 Agradecimentos
-
-- **INMET** - Instituto Nacional de Meteorologia do Brasil
-- **Embrapa Café** - Pesquisas e conhecimento técnico
-- **Comunidade JavaScript** - Ferramentas e bibliotecas
-- **OpenStreetMap** - Dados geográficos abertos
-
----
-
-### 🌟 Se este projeto foi útil para você, considere dar uma ⭐!
-
-**Desenvolvido com ☕ e ❤️ para a cafeicultura brasileira** 🇧🇷
