@@ -91,11 +91,28 @@
         <!-- Weather Alerts -->
         <div class="card">
             <div class="card-header">
-                <h3>Alertas Climáticos</h3>
+                <h3>⚡ Alertas Climáticos</h3>
             </div>
             <div class="card-body">
                 <div id="weatherAlerts">
                     <div class="text-muted text-center">Nenhum alerta ativo</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- NOVA: Previsão e Alertas Preditivos -->
+        <div class="card">
+            <div class="card-header">
+                <h3>🔮 Previsão e Riscos Futuros</h3>
+                <div class="card-actions">
+                    <button onclick="atualizarPrevisao()" class="btn btn-secondary btn-sm">
+                        🔄 Atualizar Previsão
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="previsaoContainer">
+                    <div class="loading">Carregando previsão...</div>
                 </div>
             </div>
         </div>
@@ -108,7 +125,9 @@ document.addEventListener('DOMContentLoaded', function() {
     loadDashboardData();
     loadRecentRecommendations();
     loadClimateOverview();
+    loadRecommendationsChart();
     loadWeatherAlerts();
+    loadPrevisao(); // NOVA função
 });
 
 async function loadDashboardData() {
@@ -260,6 +279,105 @@ function loadWeatherAlerts() {
     container.innerHTML = html;
 }
 
+// Implementar função que estava faltando
+async function loadRecommendationsChart() {
+    try {
+        const response = await fetch('/api/recomendacoes/dashboard');
+        const data = await response.json();
+        
+        if (!data.estatisticas) {
+            console.warn('Dados de estatísticas não encontrados');
+            return;
+        }
+        
+        const ctx = document.getElementById('recomendacoesChart');
+        if (!ctx) {
+            console.warn('Canvas recomendacoesChart não encontrado');
+            return;
+        }
+        
+        // Destruir gráfico anterior se existir
+        if (window.recomendacoesChartInstance) {
+            window.recomendacoesChartInstance.destroy();
+        }
+        
+        // Preparar dados para o gráfico
+        const statusData = data.estatisticas.porStatus || [];
+        const labels = [];
+        const dataValues = [];
+        const backgroundColors = [];
+        
+        statusData.forEach(item => {
+            labels.push(item._id === 'pendente' ? 'Pendentes' : 
+                       item._id === 'concluida' ? 'Concluídas' : 
+                       item._id === 'vencida' ? 'Vencidas' : item._id);
+            dataValues.push(item.count);
+            
+            // Cores para cada status
+            if (item._id === 'pendente') backgroundColors.push('#ffc107');
+            else if (item._id === 'concluida') backgroundColors.push('#28a745');
+            else if (item._id === 'vencida') backgroundColors.push('#dc3545');
+            else backgroundColors.push('#6c757d');
+        });
+        
+        // Se não há dados, mostrar gráfico vazio
+        if (dataValues.length === 0) {
+            labels.push('Nenhuma recomendação');
+            dataValues.push(1);
+            backgroundColors.push('#dee2e6');
+        }
+        
+        // Criar gráfico
+        window.recomendacoesChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: dataValues,
+                    backgroundColor: backgroundColors,
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                return `${label}: ${value} (${percentage}%)`;
+                            }
+                        }
+                    }
+                },
+                animation: {
+                    animateRotate: true,
+                    duration: 1000
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('Erro ao carregar gráfico de recomendações:', error);
+        
+        // Mostrar mensagem de erro no lugar do gráfico
+        const container = document.getElementById('recomendacoesChart').parentElement;
+        container.innerHTML = '<div class="text-danger text-center p-3">Erro ao carregar dados do gráfico</div>';
+    }
+}
+
 function updateAllClimateData() {
     window.agroApp.showLoading('Atualizando dados climáticos...');
     
@@ -324,4 +442,235 @@ function getPriorityClass(priority) {
 function formatDate(dateString) {
     return new Date(dateString).toLocaleDateString('pt-BR');
 }
+
+// NOVA: Funções para previsão do tempo e alertas preditivos
+async function loadPrevisao() {
+    try {
+        console.log('🔍 Carregando previsão...');
+        
+        // Buscar primeira plantação do usuário para previsão
+        const plantacoesResponse = await fetch('/api/plantacoes');
+        
+        if (!plantacoesResponse.ok) {
+            throw new Error(`Erro ao buscar plantações: ${plantacoesResponse.status}`);
+        }
+        
+        const plantacoes = await plantacoesResponse.json();
+        console.log('🌱 Plantações encontradas:', plantacoes.length);
+        
+        if (plantacoes.length === 0) {
+            document.getElementById('previsaoContainer').innerHTML = 
+                '<div class="text-muted text-center">Cadastre uma plantação para ver a previsão do tempo</div>';
+            return;
+        }
+        
+        const primeiraPlantacao = plantacoes[0];
+        console.log('🎯 Buscando previsão para:', primeiraPlantacao.nome);
+        
+        // Buscar previsão para a primeira plantação
+        const response = await fetch(`/api/previsao/${primeiraPlantacao._id}`);
+        
+        if (!response.ok) {
+            throw new Error(`Erro na API de previsão: ${response.status} - ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('🔮 Dados de previsão recebidos:', data);
+        
+        renderPrevisao(data);
+        
+    } catch (error) {
+        console.error('❌ Erro ao carregar previsão:', error);
+        document.getElementById('previsaoContainer').innerHTML = 
+            `<div class="text-danger text-center">
+                <div>Erro ao carregar previsão do tempo</div>
+                <small class="text-muted">${error.message}</small>
+            </div>`;
+    }
+}
+
+function renderPrevisao(data) {
+    const container = document.getElementById('previsaoContainer');
+    
+    if (!data.previsao || data.previsao.length === 0) {
+        container.innerHTML = '<div class="text-muted text-center">Previsão não disponível</div>';
+        return;
+    }
+    
+    // Resumo dos alertas
+    const resumoHtml = `
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <h5>${data.plantacao.nome} - ${data.plantacao.variedade}</h5>
+                <small class="text-muted">${data.plantacao.localizacao.cidade}, ${data.plantacao.localizacao.estado}</small>
+            </div>
+            <div class="col-md-4 text-end">
+                <span class="badge badge-info">${data.resumo.totalAlertas} alertas</span>
+                ${data.resumo.alertasUrgentes > 0 ? `<span class="badge badge-danger">${data.resumo.alertasUrgentes} urgentes</span>` : ''}
+            </div>
+        </div>
+    `;
+    
+    // Alertas prioritários
+    let alertasHtml = '';
+    if (data.alertas.length > 0) {
+        alertasHtml = `
+            <div class="alertas-preditivos mb-3">
+                <h6>🚨 Alertas Detectados:</h6>
+                ${data.alertas.slice(0, 3).map(alerta => `
+                    <div class="alert alert-${getPriorityAlertClass(alerta.prioridade)} mb-2" style="padding: 0.75rem;">
+                        <strong>${alerta.titulo}</strong><br>
+                        <small>${alerta.descricao}</small><br>
+                        <em>Ação: ${alerta.acaoRecomendada.substring(0, 100)}...</em>
+                    </div>
+                `).join('')}
+                ${data.alertas.length > 3 ? `<small class="text-muted">E mais ${data.alertas.length - 3} alertas...</small>` : ''}
+            </div>
+        `;
+    }
+    
+    // Previsão dos próximos dias
+    const previsaoHtml = `
+        <div class="previsao-5dias">
+            <h6>📅 Previsão para os Próximos 5 Dias:</h6>
+            <div class="row">
+                ${data.previsao.map((dia, index) => `
+                    <div class="col">
+                        <div class="dia-previsao text-center">
+                            <div class="data">${formatarDataPrevisao(dia.data, index)}</div>
+                            <div class="temperatura">
+                                <span class="temp-max">${Math.round(dia.temperatura.maxima)}°</span>
+                                <span class="temp-min text-muted">${Math.round(dia.temperatura.minima)}°</span>
+                            </div>
+                            <div class="precipitacao">
+                                ${dia.precipitacao > 0 ? `💧 ${dia.precipitacao}mm` : '☀️'}
+                            </div>
+                            <div class="umidade text-muted">
+                                <small>${Math.round(dia.umidade)}%</small>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = resumoHtml + alertasHtml + previsaoHtml;
+}
+
+function getPriorityAlertClass(prioridade) {
+    const classes = {
+        'urgente': 'danger',
+        'alta': 'warning',
+        'media': 'info',
+        'baixa': 'secondary'
+    };
+    return classes[prioridade] || 'secondary';
+}
+
+function formatarDataPrevisao(dataString, index) {
+    if (index === 0) return 'Hoje';
+    if (index === 1) return 'Amanhã';
+    
+    const data = new Date(dataString);
+    const dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return dias[data.getDay()];
+}
+
+async function atualizarPrevisao() {
+    console.log('🔄 Iniciando atualização de previsão...');
+    
+    if (!window.agroApp || !window.agroApp.showLoading) {
+        console.warn('⚠️ agroApp não disponível, continuando sem loading...');
+    } else {
+        window.agroApp.showLoading('Atualizando previsão...');
+    }
+    
+    try {
+        // Gerar novas recomendações preditivas
+        console.log('📡 Chamando API de recomendações preditivas...');
+        
+        const response = await fetch('/api/recomendacoes/gerar-preditivas', { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        
+        console.log('📊 Response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Erro ${response.status}: ${errorText}`);
+        }
+        
+        const result = await response.json();
+        console.log('✅ Resultado:', result);
+        
+        // Mostrar sucesso
+        if (window.agroApp && window.agroApp.showToast) {
+            window.agroApp.showToast(result.message, 'success');
+        } else {
+            alert(result.message);
+        }
+        
+        // Recarregar dados
+        console.log('🔄 Recarregando dados...');
+        loadPrevisao(); // Recarregar previsão
+        loadDashboardData(); // Recarregar dashboard
+        
+    } catch (error) {
+        console.error('❌ Erro ao atualizar previsão:', error);
+        
+        const errorMsg = 'Erro ao atualizar previsão: ' + error.message;
+        if (window.agroApp && window.agroApp.showToast) {
+            window.agroApp.showToast(errorMsg, 'error');
+        } else {
+            alert(errorMsg);
+        }
+    } finally {
+        if (window.agroApp && window.agroApp.hideLoading) {
+            window.agroApp.hideLoading();
+        }
+        console.log('🏁 Atualização finalizada');
+    }
+}
 </script>
+
+<style>
+.dia-previsao {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 0.75rem 0.5rem;
+    margin-bottom: 0.5rem;
+    background: #f8f9fa;
+}
+
+.temperatura {
+    font-weight: bold;
+    margin: 0.25rem 0;
+}
+
+.temp-max {
+    color: #dc3545;
+}
+
+.temp-min {
+    color: #6c757d;
+    margin-left: 0.25rem;
+}
+
+.precipitacao {
+    margin: 0.25rem 0;
+    font-size: 0.9rem;
+}
+
+.alertas-preditivos .alert {
+    border-left: 4px solid;
+}
+
+.card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+</style>

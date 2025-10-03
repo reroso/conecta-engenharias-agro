@@ -78,7 +78,7 @@ class CafeAlgorithm {
   /**
    * Método principal para gerar recomendações
    */
-  gerarRecomendacoes(plantacao, dadosClimaticos, dadosSolo) {
+  async gerarRecomendacoes(plantacao, dadosClimaticos, dadosSolo, previsao5Dias = null) {
     const recomendacoes = [];
     const variedade = this.variedades[plantacao.variedade_cafe];
     
@@ -86,17 +86,23 @@ class CafeAlgorithm {
       throw new Error(`Variedade de café não reconhecida: ${plantacao.variedade_cafe}`);
     }
 
-    // 1. Análise do Solo
+    // 1. Análise do Solo (dados históricos)
     const recomendacoesSolo = this.analisarSolo(dadosSolo, variedade, plantacao);
     recomendacoes.push(...recomendacoesSolo);
 
-    // 2. Análise Climática
+    // 2. Análise Climática (dados históricos)
     const recomendacoesClima = this.analisarClima(dadosClimaticos, variedade, plantacao);
     recomendacoes.push(...recomendacoesClima);
 
     // 3. Análise por Fase Fenológica
     const recomendacoesFase = this.analisarFaseFenologica(plantacao, dadosClimaticos, variedade);
     recomendacoes.push(...recomendacoesFase);
+
+    // 4. NOVA: Análise Preditiva (previsão do tempo)
+    if (previsao5Dias && previsao5Dias.length > 0) {
+      const recomendacoesPreditivas = await this.analisarPrevisao(plantacao, previsao5Dias, variedade);
+      recomendacoes.push(...recomendacoesPreditivas);
+    }
 
     return recomendacoes;
   }
@@ -409,6 +415,34 @@ class CafeAlgorithm {
         parametros: recomendacao.parametros
       }
     };
+  }
+
+  /**
+   * NOVA: Análise preditiva baseada em previsão do tempo
+   * @param {Object} plantacao 
+   * @param {Array} previsao5Dias 
+   * @param {Object} variedade 
+   * @returns {Array} Recomendações preventivas
+   */
+  async analisarPrevisao(plantacao, previsao5Dias, variedade) {
+    const PrevisaoService = require('./PrevisaoService');
+    const alertasPreditivos = PrevisaoService.analisarRiscosFuturos(previsao5Dias, plantacao);
+    
+    // Converter alertas em recomendações com formatação do sistema
+    return alertasPreditivos.map(alerta => ({
+      tipo: `${alerta.tipo}_preditivo`,
+      prioridade: alerta.prioridade,
+      titulo: `🔮 ${alerta.titulo}`,
+      descricao: `PREVISÃO: ${alerta.descricao}`,
+      acaoRecomendada: alerta.acaoRecomendada,
+      fundamentacao: `Análise preditiva - ${alerta.tipo}`,
+      parametros: { 
+        ...alerta.parametros,
+        tipo_analise: 'preditiva',
+        data_evento: alerta.dataEvento,
+        variedade: plantacao.variedade_cafe
+      }
+    }));
   }
 }
 

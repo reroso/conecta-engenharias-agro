@@ -275,8 +275,20 @@ async function verificarEGerarRecomendacoesAutomaticas(usuarioId) {
           tipo_solo: plantacao.tipo_solo || 'medio'
         };
         
-        // Gerar novas recomendações
-        const recomendacoes = algoritmo.gerarRecomendacoes(plantacao, dadosClimaticos, dadosSolo);
+        // Buscar previsão do tempo para análise preditiva
+        let previsao5Dias = null;
+        try {
+          const PrevisaoService = require('./services/PrevisaoService');
+          previsao5Dias = await PrevisaoService.buscarPrevisao5Dias(
+            plantacao.localizacao.latitude, 
+            plantacao.localizacao.longitude
+          );
+        } catch (error) {
+          console.warn('⚠️ Erro ao buscar previsão para verificação automática:', error.message);
+        }
+        
+        // Gerar novas recomendações (históricas + preditivas)
+        const recomendacoes = await algoritmo.gerarRecomendacoes(plantacao, dadosClimaticos, dadosSolo, previsao5Dias);
         
         // Salvar recomendações
         recomendacoes.forEach(rec => {
@@ -285,7 +297,8 @@ async function verificarEGerarRecomendacoesAutomaticas(usuarioId) {
         });
         
         if (recomendacoes.length > 0) {
-          console.log(`✅ ${recomendacoes.length} recomendações automáticas geradas para ${plantacao.nome}`);
+          const preditivas = recomendacoes.filter(r => r.parametros?.tipo_analise === 'preditiva').length;
+          console.log(`✅ ${recomendacoes.length} recomendações automáticas geradas para ${plantacao.nome} (${preditivas} preditivas)`);
         }
       }
     }
@@ -410,8 +423,21 @@ app.post('/api/plantacoes', requireAuth, async (req, res) => {
         tipo_solo: plantacao.tipo_solo
       };
       
-      // Gerar recomendações usando algoritmo determinístico
-      const recomendacoes = algoritmo.gerarRecomendacoes(plantacao, dadosClimaticos, dadosSolo);
+      // Buscar previsão do tempo para análise preditiva
+      let previsao5Dias = null;
+      try {
+        const PrevisaoService = require('./services/PrevisaoService');
+        previsao5Dias = await PrevisaoService.buscarPrevisao5Dias(
+          plantacao.localizacao.latitude, 
+          plantacao.localizacao.longitude
+        );
+        console.log(`✅ Previsão obtida para ${plantacao.nome}: ${previsao5Dias.length} dias`);
+      } catch (error) {
+        console.warn('⚠️ Erro ao buscar previsão, continuando sem análise preditiva:', error.message);
+      }
+      
+      // Gerar recomendações usando algoritmo determinístico + preditivo
+      const recomendacoes = await algoritmo.gerarRecomendacoes(plantacao, dadosClimaticos, dadosSolo, previsao5Dias);
       
       // Salvar recomendações
       recomendacoes.forEach(rec => {
@@ -419,7 +445,8 @@ app.post('/api/plantacoes', requireAuth, async (req, res) => {
         simulatedDB.addRecomendacao(recomendacaoFormatada);
       });
       
-      console.log(`${recomendacoes.length} recomendações automáticas geradas para ${plantacao.nome}`);
+      const recomendacoesPreditivas = recomendacoes.filter(r => r.parametros?.tipo_analise === 'preditiva').length;
+      console.log(`${recomendacoes.length} recomendações geradas para ${plantacao.nome} (${recomendacoesPreditivas} preditivas)`);
     } catch (error) {
       console.warn('Erro ao gerar recomendações automáticas:', error.message);
       // Não falhar o cadastro se recomendações falharem
@@ -774,7 +801,164 @@ app.post('/api/clima/atualizar', requireAuth, async (req, res) => {
   }
 });
 
-// API: Testar conexão com INMET
+// API: Previsão do tempo e alertas preditivos
+app.get('/api/previsao/:plantacaoId', requireAuth, async (req, res) => {
+  try {
+    const plantacaoId = req.params.plantacaoId;
+    const plantacao = simulatedDB.findById('plantacoes', plantacaoId);
+    
+    if (!plantacao || plantacao.usuario !== req.session.user.id) {
+      return res.status(404).json({ error: 'Plantação não encontrada' });
+    }
+
+    const PrevisaoService = require('./services/PrevisaoService');
+    
+    // Buscar previsão de 5 dias
+    const previsao5Dias = await PrevisaoService.buscarPrevisao5Dias(
+      plantacao.localizacao.latitude,
+      plantacao.localizacao.longitude
+    );
+    
+    // Analisar riscos futuros
+    const alertasPreditivos = PrevisaoService.analisarRiscosFuturos(previsao5Dias, plantacao);
+    
+    res.json({
+      plantacao: {
+        id: plantacao._id,
+        nome: plantacao.nome,
+        variedade: plantacao.variedade_cafe,
+        localizacao: plantacao.localizacao
+      },
+      previsao: previsao5Dias,
+      alertas: alertasPreditivos,
+      resumo: {
+        totalAlertas: alertasPreditivos.length,
+        alertasUrgentes: alertasPreditivos.filter(a => a.prioridade === 'urgente').length,
+        alertasAltos: alertasPreditivos.filter(a => a.prioridade === 'alta').length,
+        proximoRisco: alertasPreditivos.length > 0 ? alertasPreditivos[0] : null
+      }
+    });
+    
+  } catch (error) {
+    console.error('Erro ao buscar previsão:', error);
+    res.status(500).json({ error: 'Erro interno ao buscar previsão' });
+  }
+});
+
+// API: Gerar recomendações com análise preditiva
+app.post('/api/recomendacoes/gerar-preditivas', requireAuth, async (req, res) => {
+  try {
+    const { plantacaoId } = req.body;
+    
+    if (plantacaoId) {
+      // Gerar para plantação específica
+      const plantacao = simulatedDB.findById('plantacoes', plantacaoId);
+      if (!plantacao || plantacao.usuario !== req.session.user.id) {
+        return res.status(404).json({ error: 'Plantação não encontrada' });
+      }
+      
+      await gerarRecomendacoesPreditivas(plantacao, req.session.user.id);
+      res.json({ message: `Recomendações preditivas geradas para ${plantacao.nome}` });
+      
+    } else {
+      // Gerar para todas as plantações do usuário
+      const plantacoes = simulatedDB.findPlantacoesPorUsuario(req.session.user.id);
+      
+      for (const plantacao of plantacoes) {
+        if (plantacao.especie === 'cafe') {
+          await gerarRecomendacoesPreditivas(plantacao, req.session.user.id);
+        }
+      }
+      
+      res.json({ 
+        message: `Recomendações preditivas geradas para ${plantacoes.length} plantações`,
+        plantacoes: plantacoes.length
+      });
+    }
+    
+  } catch (error) {
+    console.error('Erro ao gerar recomendações preditivas:', error);
+    res.status(500).json({ error: 'Erro interno ao gerar recomendações' });
+  }
+});
+
+// Função auxiliar para gerar recomendações preditivas
+async function gerarRecomendacoesPreditivas(plantacao, usuarioId) {
+  try {
+    const CafeAlgorithm = require('./services/CafeAlgorithm');
+    const PrevisaoService = require('./services/PrevisaoService');
+    const algoritmo = new CafeAlgorithm();
+    
+    // VERIFICAR SE JÁ EXISTEM RECOMENDAÇÕES PREDITIVAS RECENTES
+    const agora = new Date();
+    const recomendacoesExistentes = simulatedDB.findRecomendacoesPorUsuario(usuarioId)
+      .filter(r => r.plantacao === plantacao._id && r.status === 'pendente' && r.ativa);
+    
+    // Verificar se há recomendações preditivas nas últimas 6 horas
+    const recomendacoesPreditivasRecentes = recomendacoesExistentes.filter(r => {
+      const isPreditiva = r.parametrosUsados?.parametros?.tipo_analise === 'preditiva' ||
+                         r.tipo?.includes('_preditivo');
+      if (!isPreditiva) return false;
+      
+      const criadaEm = new Date(r.criadaEm || r.createdAt);
+      const horasDesde = (agora - criadaEm) / (1000 * 60 * 60);
+      return horasDesde < 6; // Menos de 6 horas
+    });
+    
+    if (recomendacoesPreditivasRecentes.length > 0) {
+      console.log(`⏭️ Pulando geração preditiva para ${plantacao.nome} - já existem ${recomendacoesPreditivasRecentes.length} recomendações preditivas recentes`);
+      return;
+    }
+    
+    // Buscar dados necessários
+    const dadosClimaticos = simulatedDB.findDadosClimaticosPorPlantacao(plantacao._id, 7);
+    const dadosSolo = {
+      ph: plantacao.ph_solo || 6.0,
+      tipo_solo: plantacao.tipo_solo || 'medio'
+    };
+    
+    // Buscar previsão
+    const previsao5Dias = await PrevisaoService.buscarPrevisao5Dias(
+      plantacao.localizacao.latitude,
+      plantacao.localizacao.longitude
+    );
+    
+    // Gerar apenas recomendações preditivas
+    const alertasPreditivos = PrevisaoService.analisarRiscosFuturos(previsao5Dias, plantacao);
+    
+    if (alertasPreditivos.length === 0) {
+      console.log(`✅ Nenhum risco preditivo detectado para ${plantacao.nome}`);
+      return;
+    }
+    
+    // Converter em recomendações e salvar
+    alertasPreditivos.forEach(alerta => {
+      const recomendacao = {
+        tipo: `${alerta.tipo}_preditivo`,
+        prioridade: alerta.prioridade,
+        titulo: `🔮 ${alerta.titulo}`,
+        descricao: `PREVISÃO: ${alerta.descricao}`,
+        acaoRecomendada: alerta.acaoRecomendada,
+        fundamentacao: `Análise preditiva - ${alerta.tipo}`,
+        parametros: { 
+          ...alerta.parametros,
+          tipo_analise: 'preditiva',
+          data_evento: alerta.dataEvento,
+          gerada_em: agora.toISOString()
+        }
+      };
+      
+      const recomendacaoFormatada = algoritmo.formatarRecomendacao(recomendacao, plantacao._id, usuarioId);
+      simulatedDB.addRecomendacao(recomendacaoFormatada);
+    });
+    
+    console.log(`🔮 ${alertasPreditivos.length} novas recomendações preditivas geradas para ${plantacao.nome}`);
+    
+  } catch (error) {
+    console.warn(`Erro ao gerar recomendações preditivas para ${plantacao.nome}:`, error.message);
+  }
+}
+
 app.get('/api/clima/testar-inmet', requireAuth, async (req, res) => {
   try {
     const InmetService = require('./services/InmetService');
